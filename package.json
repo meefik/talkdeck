@@ -1,0 +1,18 @@
+{
+  "name": "deck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Presentation slides built with Marp",
+  "scripts": {
+    "dev": "PORT=${PORT:-8081} marp --server --watch .",
+    "preview": "marp --preview slides.md",
+    "build": "marp slides.md -o dist/index.html && cp -r assets dist/",
+    "pdf": "marp slides.md --pdf -o dist/slides.pdf",
+    "pptx": "marp slides.md --pptx -o dist/slides.pptx",
+    "export": "npm run build && npm run pdf && npm run pptx"
+  },
+  "devDependencies": {
+    "@marp-team/marp-cli": "^4.5.1",
+    "markdown-it-container": "^4.0.0"
+  }
+}

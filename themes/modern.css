@@ -1,0 +1,815 @@
+/*
+ * @theme modern
+ * @auto-scaling true
+ * @size 16:9 1280px 720px
+ * @size 4:3 960px 720px
+ */
+
+@import 'default';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+/* ---------- Design tokens ---------- */
+
+section {
+  --color-bg: #ffffff;
+  --color-fg: #2a2f45;
+  --color-heading: #0f1222;
+  --color-muted: #6b7280;
+  --color-accent: #4f46e5;
+  --color-accent-2: #7c3aed;
+  --color-accent-soft: #eef2ff;
+  --color-border: #e5e7eb;
+  --color-surface: #f6f7fb;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 88px 88px 72px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 1.55;
+}
+
+/* Dark slide: <!-- _class: invert --> */
+section.invert {
+  --color-bg: #0f1222;
+  --color-fg: #d6d9e6;
+  --color-heading: #ffffff;
+  --color-muted: #8b90a7;
+  --color-accent: #a5b4fc;
+  --color-accent-2: #c4b5fd;
+  --color-accent-soft: rgba(165, 180, 252, 0.14);
+  --color-border: #262b45;
+  --color-surface: #171b31;
+
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* ---------- Typography ---------- */
+
+/* Titled slides: the `##` title stays at the top, everything after it is
+   centred vertically in the remaining space (auto margins share the free
+   space equally above the first and below the last element).
+   !important is needed to beat the default theme's
+   `section > :last-child { margin-bottom: 0 !important }`.
+   When a footer is set, <footer> is the real last child, so the last body
+   element is :nth-last-child(2). */
+section:not(.lead):not(.divider):not(.quote) > h2 + * {
+  margin-top: auto !important;
+}
+
+/* The title block has its own bottom margin, so a body centred in the raw
+   free space looks too low. Extra bottom space nudges it up by half of this
+   value; set --body-bottom-space: 0px on a slide to disable. */
+section:not(.lead):not(.divider):not(.quote):has(> h2) {
+  --body-bottom-space: 32px;
+
+  /* top-aligned so the title never moves, even if the body overflows */
+  justify-content: flex-start;
+  padding-bottom: calc(72px + var(--body-bottom-space));
+}
+
+section:not(.lead):not(.divider):not(.quote):not([data-footer]) > h2 ~ :last-child,
+section:not(.lead):not(.divider):not(.quote)[data-footer] > h2 ~ :nth-last-child(2) {
+  margin-bottom: auto !important;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 0.6em;
+  padding: 0;
+  border: 0;
+  color: var(--color-heading);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: 2.2em;
+}
+
+h2 {
+  font-size: 1.5em;
+}
+
+h3 {
+  font-size: 1em;
+  color: var(--color-accent);
+  letter-spacing: 0;
+}
+
+/* Accent bar under slide titles */
+section > h2::after {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 6px;
+  margin-top: 18px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-2));
+}
+
+p,
+ul,
+ol,
+blockquote,
+table,
+pre {
+  margin: 0 0 0.8em;
+}
+
+ul,
+ol {
+  padding-left: 1.2em;
+}
+
+li + li,
+li > ul,
+li > ol {
+  margin-top: 0.3em;
+}
+
+li::marker {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+strong {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+del {
+  color: var(--color-muted);
+}
+
+/* ---------- Code ---------- */
+
+code {
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+pre {
+  padding: 24px 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  font-size: 0.72em;
+  line-height: 1.6;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* ---------- Tables ---------- */
+
+table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82em;
+}
+
+table tr {
+  border: 0;
+  background: transparent;
+}
+
+table th,
+table td {
+  padding: 14px 20px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+table th {
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--color-accent);
+}
+
+table tr:nth-child(2n) td {
+  background: var(--color-surface);
+}
+
+/* ---------- Quotes ---------- */
+
+blockquote {
+  padding: 28px 36px;
+  border: 0;
+  border-left: 6px solid var(--color-accent);
+  border-radius: 0 14px 14px 0;
+  background: var(--color-accent-soft);
+  color: var(--color-heading);
+  font-size: 1em;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+blockquote::before,
+blockquote::after {
+  content: none;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+blockquote + p {
+  color: var(--color-muted);
+  font-size: 0.8em;
+}
+
+/* ---------- Header, footer, pagination ---------- */
+
+header,
+footer {
+  left: 88px;
+  right: 88px;
+  padding: 0;
+  color: var(--color-muted);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+header {
+  top: 32px;
+}
+
+footer {
+  bottom: 28px;
+}
+
+section::after {
+  right: 88px;
+  bottom: 28px;
+  padding: 0;
+  color: var(--color-muted);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---------- Title slide: <!-- _class: lead --> ---------- */
+
+section.lead {
+  --color-fg: rgba(255, 255, 255, 0.82);
+  --color-heading: #ffffff;
+  --color-muted: rgba(255, 255, 255, 0.6);
+  --color-accent: #ffffff;
+  --color-accent-2: rgba(255, 255, 255, 0.5);
+  --color-accent-soft: rgba(255, 255, 255, 0.16);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.18), transparent 38%),
+    radial-gradient(circle at 10% 110%, rgba(236, 72, 153, 0.35), transparent 45%),
+    linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+  color: var(--color-fg);
+}
+
+section.lead h1 {
+  margin-bottom: 0.25em;
+  font-size: 2.6em;
+  font-weight: 800;
+}
+
+section.lead h2 {
+  color: var(--color-fg);
+  font-size: 1.25em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+section.lead p {
+  color: var(--color-muted);
+  font-size: 0.8em;
+}
+
+/* keep blockquote paragraphs at base quote size/colour even on lead slides */
+section.lead blockquote p {
+  color: inherit;
+  font-size: inherit;
+}
+
+/* ---------- Section divider: <!-- _class: invert divider --> ---------- */
+
+/* Slides without a title block are centred as a whole, so use equal padding */
+section.lead,
+section.divider,
+section.quote {
+  padding-top: 80px;
+  padding-bottom: 80px;
+}
+
+section.divider h1 {
+  margin-bottom: 0.3em;
+  font-size: 2.4em;
+}
+
+section.divider p {
+  color: var(--color-muted);
+}
+
+/* ---------- Quote slide: <!-- _class: quote --> ----------
+   > Big statement
+   Author, role  (paragraph right after the quote)
+*/
+
+section.quote {
+  padding-left: 140px;
+  padding-right: 140px;
+}
+
+section.quote blockquote::before {
+  content: '\201C';
+  position: absolute;
+  top: -135px;
+  left: -60px;
+  color: var(--color-accent);
+  font-size: 240px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.25;
+}
+
+section.quote blockquote {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 1.6em;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+section.quote blockquote strong {
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+section.quote blockquote + p {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 0.4em;
+  color: var(--color-muted);
+  font-size: 0.8em;
+}
+
+section.quote blockquote + p::before {
+  content: '';
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+/* ---------- Layout helpers (need `html: true`) ---------- */
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 56px;
+}
+
+.columns.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+}
+
+.card {
+  padding: 28px 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.card > :last-child {
+  margin-bottom: 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin: 24px 0;
+}
+
+.stat {
+  padding: 32px;
+  border: 1px solid var(--color-border);
+  border-top: 4px solid var(--color-accent);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+/* ### number, then label text, then optional *caption*.
+   Works the same with or without blank lines between them. */
+.stat h3 {
+  margin: 0 0 8px;
+  color: var(--color-accent);
+  font-size: 2.6em;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.stat p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.8em;
+}
+
+.stat br {
+  display: none;
+}
+
+.stat em {
+  display: block;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.75em;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+/* ---------- Compare: before / after ----------
+   <div class="compare">
+     <div class="card before"> ### Title ... </div>
+     <div class="card after"> ### Title ... </div>
+   </div>
+*/
+
+.compare {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 64px;
+  margin: 24px 0;
+}
+
+.compare::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  /* SVG arrow (not a text glyph) so it is optically centred regardless of font metrics */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 24px 24px no-repeat,
+    var(--color-accent);
+  transform: translate(-50%, -50%);
+}
+
+section.invert .compare::after {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f1222' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 24px 24px no-repeat,
+    var(--color-accent);
+}
+
+.compare .card {
+  font-size: 0.9em;
+}
+
+.compare .card h3 {
+  margin-bottom: 0.6em;
+  font-size: 0.75em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.compare .before {
+  border-top: 4px solid var(--color-muted);
+  background: transparent;
+}
+
+.compare .before h3 {
+  color: var(--color-muted);
+}
+
+.compare .before li::marker {
+  color: var(--color-muted);
+}
+
+.compare .after {
+  border-color: var(--color-accent);
+  border-top: 4px solid var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* Plain variant: no arrow (pros / cons, side by side). Use .after for the
+   emphasised card and .before for the muted one, in either order. */
+.compare.plain {
+  gap: 32px;
+}
+
+.compare.plain::after {
+  display: none;
+}
+
+/* ---------- Code slide ----------
+   <!-- _class: code -->   (combine with invert for dark)
+   ## Title
+
+   ```ts
+   ...
+   ```
+
+   Caption paragraph (optional, after the code block)
+*/
+
+section.code pre {
+  margin-bottom: 0.6em;
+  padding: 28px 32px;
+  border-left: 4px solid var(--color-accent);
+  font-size: 0.85em;
+  line-height: 1.65;
+  font-variant-ligatures: none;
+}
+
+section.code pre + p {
+  color: var(--color-muted);
+  font-size: 0.8em;
+}
+
+/* Syntax colours (highlight.js classes emitted by Marp) */
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: var(--color-accent-2);
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-addition {
+  color: #0d9488;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol {
+  color: #d97706;
+}
+
+.hljs-title,
+.hljs-function,
+.hljs-section {
+  color: var(--color-accent);
+}
+
+section.invert .hljs-string,
+section.invert .hljs-attr,
+section.invert .hljs-addition {
+  color: #5eead4;
+}
+
+section.invert .hljs-number,
+section.invert .hljs-literal,
+section.invert .hljs-symbol {
+  color: #fbbf24;
+}
+
+/* ---------- Figure: framed screenshot ----------
+   <div class="figure">
+
+   ![](shot.png)
+
+   Caption text
+
+   </div>
+*/
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.4em;
+}
+
+.figure p {
+  margin: 0;
+  font-size: 0.7em;
+}
+
+.figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 340px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px -12px rgba(15, 18, 34, 0.35);
+}
+
+.figure p:has(img) + p,
+.figure img + em {
+  margin-top: 18px;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+section.invert .figure img {
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- Agenda: numbered list of sections ----------
+   <div class="agenda">
+
+   1. **Section** short description
+   2. ...
+
+   </div>
+*/
+
+.agenda ol {
+  margin: 0;
+  padding: 0;
+  counter-reset: agenda;
+  list-style: none;
+}
+
+.agenda li {
+  display: block;
+  position: relative;
+  padding: 14px 0 14px 84px;
+  border-bottom: 1px solid var(--color-border);
+  counter-increment: agenda;
+}
+
+.agenda li:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.agenda li::before {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  content: counter(agenda, decimal-leading-zero);
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 1.3em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+
+/* ---------- Steps: numbered process ----------
+   <div class="steps">
+
+   1. **Title** — description
+   2. ...
+
+   </div>
+*/
+
+.steps {
+  margin-bottom: 40px;
+}
+
+.steps ol {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 28px;
+  margin: 32px 0 0;
+  padding: 0;
+  counter-reset: step;
+  list-style: none;
+}
+
+.steps li {
+  position: relative;
+  margin: 0;
+  padding-top: 76px;
+  counter-increment: step;
+  font-size: 0.85em;
+  line-height: 1.4;
+  list-style: none;
+}
+
+.steps li::marker {
+  content: '';
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+  color: var(--color-bg);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  /* fallback: Inter's digits sit ~2px high in a flex-centred line box */
+  padding-top: 4px;
+}
+
+/* exact: trim the line box to the digit's cap height so it centres optically */
+@supports (text-box: trim-both cap alphabetic) {
+  .steps li::before {
+    padding-top: 2px;
+    text-box: trim-both cap alphabetic;
+  }
+}
+
+/* connector line to the next step */
+.steps li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 25px;
+  left: 64px;
+  right: -16px;
+  height: 2px;
+  background: var(--color-border);
+}
+
+.steps li strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-heading);
+  font-size: 1.1em;
+}
+
+.steps.vertical ol {
+  grid-auto-flow: row;
+  gap: 24px;
+}
+
+.steps.vertical li {
+  padding: 6px 0 0 76px;
+  min-height: 52px;
+}
+
+.steps.vertical li:not(:last-child)::after {
+  top: 60px;
+  left: 25px;
+  right: auto;
+  width: 2px;
+  height: calc(100% - 36px);
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+.small {
+  font-size: 0.75em;
+}
+
+.center {
+  text-align: center;
+}

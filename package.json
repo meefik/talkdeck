@@ -2,17 +2,22 @@
   "name": "deck",
   "version": "1.0.0",
   "private": true,
-  "description": "Presentation slides built with Marp",
+  "description": "Markdown slides to HTML, PDF and narrated video",
   "scripts": {
-    "dev": "PORT=${PORT:-8081} marp --server --watch .",
-    "preview": "marp --preview slides.md",
-    "build": "marp slides.md -o dist/index.html && cp -r assets dist/",
-    "pdf": "marp slides.md --pdf -o dist/slides.pdf",
-    "pptx": "marp slides.md --pptx -o dist/slides.pptx",
-    "export": "npm run build && npm run pdf && npm run pptx"
+    "build": "node src/cli.js build",
+    "dev": "node src/cli.js dev",
+    "video": "node src/cli.js build --formats html,pdf,video"
   },
-  "devDependencies": {
-    "@marp-team/marp-cli": "^4.5.1",
-    "markdown-it-container": "^4.0.0"
+  "type": "module",
+  "bin": {
+    "deck": "src/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@marp-team/marp-core": "^4.4.0",
+    "markdown-it-container": "^4.0.0",
+    "puppeteer-core": "^24.0.0"
   }
 }

@@ -1,0 +1,30 @@
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+
+.marpit { position: fixed; inset: 0; }
+.marpit > svg { display: none; width: 100vw; height: 100vh; }
+.marpit > svg.active { display: block; }
+
+/* click-to-reveal bullets (Marpit fragments) */
+.marpit [data-marpit-fragment] { transition: opacity .25s ease; }
+.marpit [data-marpit-fragment].pending { opacity: 0; }
+
+/* presenter window */
+body.presenter { background: #14161f; color: #e5e7eb; font: 16px/1.5 system-ui, sans-serif; overflow: auto; }
+.presenter-grid { display: grid; grid-template-columns: 3fr 2fr; grid-template-rows: auto 1fr; gap: 16px; padding: 16px; height: 100vh; box-sizing: border-box; }
+.presenter-grid .pane { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
+.presenter-grid .pane .marpit { position: absolute; inset: 0; }
+.presenter-grid .pane .marpit > svg { width: 100%; height: 100%; }
+.presenter-side { display: flex; flex-direction: column; gap: 8px; }
+.presenter-bar { display: flex; gap: 16px; align-items: center; font-variant-numeric: tabular-nums; color: #9ca3af; }
+.presenter-notes { grid-column: 1 / -1; overflow: auto; background: #1c1f2b; border-radius: 6px; padding: 8px 20px; }
+.presenter-notes p { margin: .6em 0; }
+.presenter-bar button { background: #2a2f45; color: inherit; border: 0; border-radius: 4px; padding: 2px 10px; cursor: pointer; }
+
+@media print {
+  @page { margin: 0; }
+  html, body { height: auto; overflow: visible; background: none; }
+  .marpit { position: static; }
+  .marpit > svg { display: block; width: 100%; height: auto; break-after: page; page-break-after: always; }
+  .marpit > svg:last-child { break-after: auto; page-break-after: auto; }
+  .marpit [data-marpit-fragment].pending { opacity: 1; }
+}

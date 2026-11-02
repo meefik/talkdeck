@@ -5,11 +5,15 @@ paginate: true
 title: Modern Deck — a tour of the slide types
 description: A neutral showcase of every slide type in the modern theme
 author: Your Name
+avatar: maria
+voice: warm, calm female narrator
 header: Modern Deck
 footer: Your Name · Month 2026
 ---
 
 <!-- _class: lead -->
+<!-- _avatar: leon -->
+<!-- _voice: deep, measured male narrator -->
 <!-- _paginate: false -->
 <!-- _header: "" -->
 <!-- _footer: "" -->
@@ -390,6 +394,8 @@ export formats
 ---
 
 <!-- _class: lead -->
+<!-- _avatar: leon -->
+<!-- _voice: deep, measured male narrator -->
 <!-- _paginate: false -->
 <!-- _header: "" -->
 <!-- _footer: "" -->

@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { withBrowser } from './browser.js';
 import { speechPerSlide } from './notes.js';
 import { createTts } from './tts.js';
 import { createAvatar, invertColor, isDarkSlide, parseColor } from './avatar.js';
-import { openCache } from './cache.js';
+import { hash, openCache } from './cache.js';
 
 const PAD = 1.0;    // silence after each voice-over, before the slide fades out (s)
 const FADE = 0.3;   // fade in/out between interior slides (s)
@@ -69,8 +69,8 @@ export async function writeVideo({ deck, htmlFile, outDir, tts, avatar, only, na
       await cache.remove(path.join(outDir, 'voiceovers', `slide${num(i)}.wav`)); // notes were removed
       continue;
     }
-    log(`slide ${i + 1}: voice-over (${speech[i].length} chars${deck.voices?.[i] ? `, voice ${deck.voices[i]}` : ''})`);
-    const audio = await synth(speech[i], path.join(outDir, 'voiceovers', `slide${num(i)}.wav`), deck.voices?.[i]);
+    log(`slide ${i + 1}: voice-over (${speech[i].length} chars${tts.voice ? `, voice ${tts.voice}` : ''})`);
+    const audio = await synth(speech[i], path.join(outDir, 'voiceovers', `slide${num(i)}.wav`));
     const spoken = await duration(audio);
     segments.push({ index: i, frame: frames[k], audio, length: spoken + PAD, speech: spoken });
   }
@@ -91,7 +91,7 @@ export async function writeVideo({ deck, htmlFile, outDir, tts, avatar, only, na
   }
 
   // drop files left over from a longer version of the deck (or from an older format)
-  for (const dir of ['slides', 'voiceovers', 'avatars']) {
+  for (const dir of ['slides', 'voiceovers', 'avatars', 'segments']) {
     for (const f of await readdir(path.join(outDir, dir)).catch(() => [])) {
       const m = f.match(/^slide(\d+)\./);
       if ((m && Number(m[1]) > deck.notes.length) || (dir === 'voiceovers' && !f.endsWith('.wav'))) {
@@ -102,8 +102,6 @@ export async function writeVideo({ deck, htmlFile, outDir, tts, avatar, only, na
 
   const n = segments.length;
   const total = segments.reduce((s, x) => s + x.length, 0);
-  const chains = [];
-  const args = ['-y', '-v', 'error'];
   // Avatar: the head video as a circle in a corner (its last frame stays up once it ends), scaled to a fraction of the frame height.
   const D = Math.round(((avatar?.diameter ?? 0.26) * height) / 2) * 2;
   const bw = Math.round(((avatar?.border ?? 6) * height) / 1080);       // border width (px, 6 at 1080p); 0 = none
@@ -118,39 +116,59 @@ export async function writeVideo({ deck, htmlFile, outDir, tts, avatar, only, na
   // circular alpha with a 1px soft edge
   const circle = "a='clip(255*(W/2-hypot(X-W/2,Y-H/2)),0,255)'";
   const keep = "lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)'";
-  let k = 0; // next input index
-  segments.forEach((s, i) => {
+
+  // One ffmpeg run per slide (a single filter graph over every slide stalls on long decks), kept in
+  // segments/slideNN.mkv with lossless audio and reused while its inputs are unchanged; the segments
+  // are then joined without re-encoding the video.
+  const segDir = path.join(outDir, 'segments');
+  await mkdir(segDir, { recursive: true });
+  const fileId = async (f) => hash(await readFile(f));
+  const parts = [];
+  for (const [i, s] of segments.entries()) {
     const fin = n === 1 || i === 0 ? BOOKEND : FADE;
     const fout = n === 1 || i === n - 1 ? BOOKEND : FADE;
-    args.push('-loop', '1', '-framerate', '30', '-t', s.length.toFixed(3), '-i', s.frame);
-    const base = k++;
-    let from = `[${base}:v]scale=${width}:${height},setsar=1,format=yuv420p`;
+    const len = s.length.toFixed(3);
+    const ring = isDarkSlide(deck.classes?.[s.index]) ? borderDark : borderLight;
+    const file = path.join(segDir, `slide${num(s.index)}.mkv`);
+    const id = hash('segment-v1',
+      { width, height, D, bw, ox, oy, ring, fin, fout, len, speech: s.speech ?? 0 },
+      await fileId(s.frame), s.audio ? await fileId(s.audio) : null, s.head ? await fileId(s.head) : null);
+    parts.push(file);
+    if (await cache.fresh(file, id)) continue;
+
+    log(`slide ${s.index + 1}: encoding ${len}s`);
+    const args = ['-y', '-v', 'error', '-loop', '1', '-framerate', '30', '-t', len, '-i', s.frame];
+    const chains = [];
+    let from = `[0:v]scale=${width}:${height},setsar=1,format=yuv420p`;
+    let k = 1; // next input index
     if (s.head) {
       args.push('-i', s.head);
-      const h = k++;
-      chains.push(
-        `[${h}:v]setpts=PTS-STARTPTS,scale=${inner}:${inner},format=yuva420p,geq=${keep}:${circle}[h${i}]`);
-      let badge = `h${i}`;
+      k++;
+      chains.push(`[1:v]setpts=PTS-STARTPTS,scale=${inner}:${inner},format=yuva420p,geq=${keep}:${circle}[h]`);
+      let badge = 'h';
       if (bw > 0) {
-        chains.push(`color=c=${isDarkSlide(deck.classes?.[s.index]) ? borderDark : borderLight}:s=${D}x${D}:r=30:d=${s.length.toFixed(3)},format=yuva420p,geq=${keep}:${circle}[r${i}]`);
-        chains.push(`[r${i}][h${i}]overlay=x=${bw}:y=${bw}:eof_action=repeat:format=auto[hb${i}]`);
-        badge = `hb${i}`;
+        chains.push(`color=c=${ring}:s=${D}x${D}:r=30:d=${len},format=yuva420p,geq=${keep}:${circle}[r]`);
+        chains.push(`[r][h]overlay=x=${bw}:y=${bw}:eof_action=repeat:format=auto[hb]`);
+        badge = 'hb';
       }
-      chains.push(`${from}[b${i}]`);
-      from = `[b${i}][${badge}]overlay=x=${ox}:y=${oy}:eof_action=repeat:format=auto,format=yuv420p`;
+      chains.push(`${from}[b]`);
+      from = `[b][${badge}]overlay=x=${ox}:y=${oy}:eof_action=repeat:format=auto,format=yuv420p`;
     }
-    chains.push(`${from},fade=t=in:st=0:d=${fin},fade=t=out:st=${(s.length - fout).toFixed(3)}:d=${fout}[v${i}]`);
+    chains.push(`${from},fade=t=in:st=0:d=${fin},fade=t=out:st=${(s.length - fout).toFixed(3)}:d=${fout}[v]`);
     if (s.audio) args.push('-i', s.audio);
-    else args.push('-f', 'lavfi', '-t', s.length.toFixed(3), '-i', 'anullsrc=r=44100:cl=mono');
+    else args.push('-f', 'lavfi', '-t', len, '-i', 'anullsrc=r=44100:cl=mono');
     const padDur = Math.max(0, s.length - (s.speech ?? 0)).toFixed(3);
-    chains.push(`[${k++}:a]aresample=44100,aformat=channel_layouts=mono,apad=pad_dur=${padDur}[a${i}]`);
-  });
-  const filter = `${chains.join(';')};${segments.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${n}:v=1:a=1[vout][aout]`;
+    chains.push(`[${k}:a]aresample=44100,aformat=channel_layouts=mono,apad=pad_dur=${padDur}[a]`);
+    await run('ffmpeg', [...args, '-filter_complex', chains.join(';'), '-map', '[v]', '-map', '[a]', '-r', '30',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '19', '-c:a', 'pcm_s16le', '-t', len, file]);
+    await cache.record(file, id);
+  }
 
+  const list = path.join(segDir, 'list.txt');
+  await writeFile(list, parts.map((p) => `file '${path.basename(p)}'`).join('\n') + '\n');
   const file = path.join(outDir, name);
-  log(`encoding ${total.toFixed(1)}s of video`);
-  await run('ffmpeg', [...args, '-filter_complex', filter, '-map', '[vout]', '-map', '[aout]', '-r', '30',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '19', '-c:a', 'aac', '-b:a', '192k',
-    '-movflags', '+faststart', '-t', total.toFixed(3), file]);
+  log(`joining ${n} slides, ${total.toFixed(1)}s of video`);
+  await run('ffmpeg', ['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', list,
+    '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', file]);
   return file;
 }

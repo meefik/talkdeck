@@ -12,7 +12,7 @@ const CANDIDATES = [
 ];
 
 async function findChrome() {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
   const dirs = (process.env.PATH || '').split(process.platform === 'win32' ? ';' : ':');
   for (const c of CANDIDATES) {
     const paths = c.includes('/') || c.includes('\\') ? [c] : dirs.map((d) => `${d}/${c}`);
@@ -20,7 +20,7 @@ async function findChrome() {
       if (await access(p).then(() => true, () => false)) return p;
     }
   }
-  throw new Error('Chrome/Chromium/Edge not found. Install one or set CHROME_PATH.');
+  throw new Error('Chrome/Chromium/Edge not found. Install one or set CHROMIUM_PATH.');
 }
 
 /** Run fn(open) with a headless browser; `open(file, viewport)` returns a loaded page. */

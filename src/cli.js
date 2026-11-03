@@ -1,96 +1,42 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { mkdir } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { renderDeck, writeHtml, TEMPLATE_DIR } from './render.js';
 import { writePdf } from './pdf.js';
 import { writeVideo } from './video.js';
-import { resolveAvatars, parseColor } from './avatar.js';
+import { resolveAvatar } from './avatar.js';
 import { serve } from './dev.js';
+import { createVoiceSample } from './voices.js';
 
-const HELP = `deck — render Markdown slides to HTML, PDF and video
+const log = (m) => console.log(m);
+const exists = (p) => access(p).then(() => true, () => false);
 
-Usage:
-  deck build [dir] [options]   dir contains slides.md, assets/ and themes/
-  deck dev [dir] [--port N]    live preview with auto-reload
+const env = (name) => process.env[name];
+// service addresses come from the environment (they depend on the machine, not on the deck)
+const ttsUrl = () => env('DECK_TTS_URL') ?? 'http://127.0.0.1:8010/v1/audio';
+const avatarUrl = () => env('DECK_AVATAR_URL') ?? 'http://127.0.0.1:8010/v1/video';
 
-dir defaults to the bundled template/. Themes from template/themes are always
-available; dir/themes adds to (or overrides) them.
-
-Build options:
-  -o, --out <dir>       output directory (default: <dir>/dist)
-      --formats <list>  comma list of html,pdf,video (default: html,pdf)
-      --video           shorthand for adding "video" to --formats
-      --slides <list>   video only: render just these slides, e.g. 1-2 or 1,3,5-7 (for review);
-                        written to slides-<list>.mp4, files keep the full-deck numbers
-
-Video options (voice-over via an OpenAI-compatible /audio/speech API, qwentts by default):
-      --tts-url <url>   env DECK_TTS_URL   (default http://127.0.0.1:8010/v1)
-      --tts-key <key>   env DECK_TTS_KEY
-      --tts-model <m>   env DECK_TTS_MODEL (default qwen-tts)
-      --voice <v>       env DECK_VOICE     default voice; per slide: <!-- _voice: v --> (this slide)
-                        or <!-- voice: v --> (this and the following slides)
-                        qwen-tts: a description of the voice, e.g. "warm, calm female narrator"
-                        (none = the default narrator); other models: a voice name, e.g. af_bella
-      --tts-seed <n>    env DECK_TTS_SEED  qwen-tts only: sampling seed
-      --speed <n>       env DECK_SPEED     (default 1.0; not used by qwen-tts)
-      --silent <sec>    seconds shown for slides without notes (default 3)
-
-Avatar (talking head composited as a circle on a slide; used with video):
-  Pick the face per slide with a Marp directive next to the notes:
-      <!-- _avatar: maria -->   this slide      <!-- avatar: leon -->   this and the following slides
-      <!-- _avatar: none -->    no avatar        (front matter "avatar: maria" sets a deck default)
-  Names are files in avatars/ (png/jpg/webp) of dir or template/.
-      --avatar <name>           default face for slides without a directive (implies --video)
-      --no-avatar               ignore avatar directives
-      --avatar-url <url>        env DECK_AVATAR_URL (default http://127.0.0.1:8010)
-      --avatar-size <px>        generated head size, 2..1920 (default 512)
-      --avatar-diameter <frac>  on-screen diameter as a fraction of frame height (default 0.26)
-      --avatar-position <pos>   top-right (default), top-left, bottom-right, bottom-left
-      --avatar-border <px>      border width in px at 1080p (default 6, 0 = none)
-      --avatar-border-color <c> border color on light slides: white, black, #rgb or #rrggbb (default black);
-                                dark slides (invert, lead, divider, quote) get the inverse color
-  Generation is slow (~5x realtime, one job at a time) and cached by content.
-
-PDF and video need Chrome/Chromium/Edge (or CHROME_PATH); video also needs ffmpeg.
-Speaker notes are the HTML comments at the end of each slide.
-`;
-
-const { values: o, positionals } = parseArgs({
-  allowPositionals: true,
-  options: {
-    out: { type: 'string', short: 'o' },
-    formats: { type: 'string' },
-    video: { type: 'boolean' },
-    slides: { type: 'string' },
-    port: { type: 'string' },
-    'tts-url': { type: 'string' },
-    'tts-key': { type: 'string' },
-    'tts-model': { type: 'string' },
-    voice: { type: 'string' },
-    'tts-seed': { type: 'string' },
-    speed: { type: 'string' },
-    silent: { type: 'string' },
-    avatar: { type: 'string' },
-    'no-avatar': { type: 'boolean' },
-    'avatar-url': { type: 'string' },
-    'avatar-size': { type: 'string' },
-    'avatar-diameter': { type: 'string' },
-    'avatar-position': { type: 'string' },
-    'avatar-border': { type: 'string' },
-    'avatar-border-color': { type: 'string' },
-    help: { type: 'boolean', short: 'h' },
-  },
-});
-
-const [command, input] = positionals;
-if (o.help || !command || !['build', 'dev'].includes(command)) {
-  process.stdout.write(HELP);
-  process.exit(o.help || !command ? 0 : 1);
+/**
+ * The deck folder: the one given, else the current folder if it has a slides.md,
+ * else (build, dev) the bundled template/.
+ */
+async function deckDir(input, { fallbackToTemplate }) {
+  if (input) return path.resolve(input);
+  if (await exists(path.resolve('slides.md'))) return path.resolve('.');
+  if (fallbackToTemplate) return TEMPLATE_DIR;
+  throw new Error('no deck folder: run this inside a folder with slides.md, or pass [dir] (e.g. "template")');
 }
 
-const dir = input ? path.resolve(input) : TEMPLATE_DIR;
-const log = (m) => console.log(m);
+/** Shared by build and video: render slides.md to <out>/slides.html (+ assets/). */
+async function render(o, input) {
+  const dir = await deckDir(input, { fallbackToTemplate: true });
+  if (!(await exists(path.join(dir, 'slides.md')))) throw new Error(`no slides.md in ${dir}`);
+  const out = path.resolve(o.out ?? 'output');
+  await mkdir(out, { recursive: true });
+  const deck = await renderDeck(dir);
+  return { deck, dir, out, html: await writeHtml(deck, dir, out) };
+}
 
 function parseSlides(spec, total) {
   const set = new Set();
@@ -104,67 +50,178 @@ function parseSlides(spec, total) {
   return [...set].sort((x, y) => x - y);
 }
 
-async function build() {
-  const formats = new Set((o.formats ?? 'html,pdf').split(',').map((s) => s.trim()).filter(Boolean));
-  if (o.video || o.slides || (o.avatar && !o['no-avatar'])) formats.add('video');
-  if (!['bottom-right', 'bottom-left', 'top-right', 'top-left'].includes(o['avatar-position'] ?? 'top-right')) {
-    throw new Error('--avatar-position must be bottom-right, bottom-left, top-right or top-left');
-  }
-  if (o['avatar-border-color']) parseColor(o['avatar-border-color']);
-  const unknown = [...formats].filter((f) => !['html', 'pdf', 'video'].includes(f));
-  if (unknown.length) throw new Error(`unknown format: ${unknown.join(', ')}`);
+const COMMANDS = {
+  build: {
+    summary: 'render slides.md to HTML, and optionally PDF and a narrated video',
+    usage: 'deck build [dir] [options]',
+    options: {
+      out: { type: 'string', short: 'o' },
+      pdf: { type: 'boolean' },
+      video: { type: 'boolean' },
+      slides: { type: 'string' },
+    },
+    help: `
+dir: the deck folder with slides.md, assets/, themes/, avatars/ and voices/.
+Default: the current folder if it has a slides.md, else the bundled template/.
+Themes, avatars and voices in template/ are always available; dir adds to or overrides them.
 
-  const out = path.resolve(o.out ?? path.join(dir, 'dist'));
-  await mkdir(out, { recursive: true });
+  -o, --out <dir>          output directory (default: ./output)
+      --pdf                also write slides.pdf (needs Chrome/Chromium/Edge, or CHROMIUM_PATH)
+      --video              also write slides.mp4 (needs Chrome/Chromium/Edge and ffmpeg)
+      --slides <list>      with --video: just these slides, e.g. 1-2 or 1,3,5-7 (for review);
+                           written to slides-<list>.mp4, files keep the full-deck numbers
 
-  const deck = await renderDeck(dir);
-  log(`${deck.notes.length} slides`);
-  // pdf and video render from the html file, so it is always written
-  const html = await writeHtml(deck, dir, out);
-  log(`html   ${html}`);
+Always writes slides.html (a standalone player with presenter mode) and a copy of assets/.
+The video is 1920x1080, one still per slide plus its voice-over (the speaker notes, i.e. the
+HTML comments, are the script), with the avatar on top. It also leaves slides/slideNN.png,
+voiceovers/slideNN.wav, avatars/slideNN.mp4 and segments/slideNN.mkv in the output folder. Generated files are cached
+there (.cache.json), so editing a slide only regenerates that slide.
 
-  if (formats.has('pdf')) {
-    const pdf = path.join(out, 'slides.pdf');
-    await writePdf(html, pdf);
-    log(`pdf    ${pdf}`);
-  }
-  if (formats.has('video')) {
-    const only = o.slides && parseSlides(o.slides, deck.notes.length);
-    const faces = o['no-avatar'] ? [] : await resolveAvatars(deck.avatars, {
-      deckDir: dir,
-      dirs: [path.join(dir, 'avatars'), path.join(TEMPLATE_DIR, 'avatars')],
-      fallback: o.avatar,
-    });
-    const mp4 = await writeVideo({
-      deck, htmlFile: html, outDir: out, log, only,
-      name: only ? `slides-${o.slides.replace(/,/g, '_')}.mp4` : 'slides.mp4', silent: Number(o.silent ?? 3),
-      avatar: faces.some(Boolean) && {
-        files: faces,
-        url: o['avatar-url'] ?? process.env.DECK_AVATAR_URL ?? 'http://127.0.0.1:8010',
-        size: Number(o['avatar-size'] ?? 512),
-        diameter: Number(o['avatar-diameter'] ?? 0.26),
-        position: o['avatar-position'] ?? 'top-right',
-        border: Number(o['avatar-border'] ?? 6),
-        borderColor: o['avatar-border-color'] ?? 'black',
-      },
-      tts: {
-        url: o['tts-url'] ?? process.env.DECK_TTS_URL ?? 'http://127.0.0.1:8010/v1',
-        key: o['tts-key'] ?? process.env.DECK_TTS_KEY,
-        model: o['tts-model'] ?? process.env.DECK_TTS_MODEL ?? 'qwen-tts',
-        voice: o.voice ?? process.env.DECK_VOICE,
-        seed: (o['tts-seed'] ?? process.env.DECK_TTS_SEED) === undefined ? undefined : Number(o['tts-seed'] ?? process.env.DECK_TTS_SEED),
-        speed: Number(o.speed ?? process.env.DECK_SPEED ?? 1),
-      },
-    });
-    log(`video  ${mp4}`);
-  }
-  if (!formats.has('html')) log('(slides.html is kept: it is the source for the other formats)');
+The video is set up in the slides.md header (front matter), for the whole deck (one voice, one face):
+
+  voice: maria              the voice: a sample name from voices/ (cloned, so it is the same on every
+                            slide; create one with "deck voice"), or a description ("warm, calm
+                            female narrator"; designed fresh per slide, drifts a little), or nothing =
+                            the default narrator. Other TTS models: a voice name (af_bella).
+  avatar: maria             the face: an image file in avatars/ (or "none"); no avatar if omitted
+  tts-model: qwen-tts       tts-speed: 1 (not used by qwen-tts)
+  silent-duration: 3        seconds shown for slides without notes
+  avatar-size: 512          generated head size in px, 2..1920
+  avatar-diameter: 0.26     on-screen diameter, fraction of the frame height
+  avatar-position: top-right   or top-left, bottom-right, bottom-left
+  avatar-border: 6          border width in px at 1080p (0 = none)
+  avatar-border-color: black   white, black, "#rgb" or "#rrggbb" (quoted) on light slides; dark slides
+                            (invert, lead) get the inverse color
+Voices and avatars are looked up in dir/ first, then in template/. They cannot be set per slide
+(a voice or avatar comment on a slide is an error).
+The services are set in the environment, not in the deck:
+  DECK_TTS_URL     voice-over API base   (default http://127.0.0.1:8010/v1/audio; requests go to <url>/speech)
+  DECK_AVATAR_URL  talking-head API base (default http://127.0.0.1:8010/v1/video)
+  DECK_TTS_KEY     API key for the voice-over service, if it needs one
+  DECK_AVATAR_KEY  API key for the talking-head service, if it needs one
+Avatar generation is slow (~5x realtime, one job at a time).`,
+    async run(o, [input]) {
+      if (o.slides && !o.video) throw new Error('--slides only applies to the video: add --video');
+      const { deck, dir, out, html } = await render(o, input);
+      const { tts, avatar } = deck.config;
+      const only = o.slides && parseSlides(o.slides, deck.notes.length);
+      log(`${deck.notes.length} slides`);
+      log(`html   ${html}`);
+
+      if (o.pdf) {
+        const pdf = path.join(out, 'slides.pdf');
+        await writePdf(html, pdf);
+        log(`pdf    ${pdf}`);
+      }
+      if (o.video) {
+        const face = await resolveAvatar(avatar.name, {
+          deckDir: dir,
+          dirs: [path.join(dir, 'avatars'), path.join(TEMPLATE_DIR, 'avatars')],
+        });
+        const mp4 = await writeVideo({
+          deck, htmlFile: html, outDir: out, log, only,
+          name: only ? `slides-${o.slides.replace(/\s+/g, '').replace(/,/g, '_')}.mp4` : 'slides.mp4',
+          silent: deck.config.silentDuration,
+          avatar: face && { ...avatar, url: avatarUrl(), key: env('DECK_AVATAR_KEY'), files: deck.notes.map(() => face) },
+          tts: { ...tts, url: ttsUrl(), key: env('DECK_TTS_KEY'), voiceDirs: [path.join(dir, 'voices'), path.join(TEMPLATE_DIR, 'voices')] },
+        });
+        log(`video  ${mp4}`);
+      }
+    },
+  },
+
+  dev: {
+    summary: 'live preview with auto-reload',
+    usage: 'deck dev [dir] [--port N]',
+    options: { port: { type: 'string' } },
+    help: `
+dir: as for "deck build". Serves the deck at http://localhost:<port>/ and reloads when
+slides.md, themes/ or assets/ change.
+
+      --port <n>           env PORT (default 8081)`,
+    async run(o, [input]) {
+      const dir = await deckDir(input, { fallbackToTemplate: true });
+      await serve(dir, Number(o.port ?? env('PORT') ?? 8081), log);
+    },
+  },
+
+  voice: {
+    summary: 'create a voice sample to clone (qwen-tts)',
+    usage: 'deck voice <name> [dir] --describe "<text>" [options]',
+    options: {
+      describe: { type: 'string' },
+      text: { type: 'string' },
+      'tts-seed': { type: 'string' },
+      force: { type: 'boolean' },
+    },
+    help: `
+Designs a voice from a description and saves it as <dir>/voices/<name>.wav (+ <name>.txt, its
+transcript). Use the name as "voice:" in the deck header: every slide is then spoken by a clone of
+this sample, so the voice stays the same across the deck.
+
+dir: the deck folder to write into. Default: the current folder if it has a slides.md; otherwise
+it must be given (e.g. "deck voice maria template" for the bundled template).
+The voice-over service is DECK_TTS_URL (and DECK_TTS_KEY).
+
+      --describe <text>    the voice, e.g. "warm, calm female narrator" (required)
+      --text <text>        what the sample says (default: a ~13 s neutral passage; 10-15 s clones best)
+      --tts-seed <n>       fixed seed, to get the same voice again from the same description
+      --force              replace an existing sample (changes the voice for every deck using it)`,
+    async run(o, [name, input]) {
+      if (!name || !o.describe) throw new Error('usage: deck voice <name> [dir] --describe "warm, calm female narrator"');
+      if (!/^[\w.-]+$/.test(name)) throw new Error(`bad voice name "${name}" (letters, digits, _ . - only)`);
+      const dir = await deckDir(input, { fallbackToTemplate: false });
+      const seed = o['tts-seed'] === undefined ? undefined : Number(o['tts-seed']);
+      if (seed !== undefined && !(Number.isInteger(seed) && seed >= 0 && seed <= 2 ** 31)) throw new Error(`bad --tts-seed "${o['tts-seed']}" (an integer from 0 to ${2 ** 31})`);
+      const r = await createVoiceSample({
+        url: ttsUrl(), key: env('DECK_TTS_KEY'), name, describe: o.describe, text: o.text, seed,
+        dir: path.join(dir, 'voices'), force: o.force,
+      });
+      log(`voice  ${r.file}  (${r.seconds.toFixed(1)} s)`);
+      if (r.seconds < 8 || r.seconds > 20) log('note: samples of 10-15 s clone best; use --text to adjust the length');
+    },
+  },
+};
+
+function topHelp() {
+  const w = Math.max(...Object.values(COMMANDS).map((c) => c.usage.length));
+  return `deck — render Markdown slides to HTML, PDF and video
+
+Usage:
+${Object.values(COMMANDS).map((c) => `  ${c.usage.padEnd(w)}  ${c.summary}`).join('\n')}
+
+Run "deck <command> --help" for the options of a command.
+`;
+}
+
+const [command, ...rest] = process.argv.slice(2);
+const spec = COMMANDS[command];
+if (!command || command === '--help' || command === '-h' || command === 'help') {
+  process.stdout.write(topHelp());
+  process.exit(0);
+}
+if (!spec) {
+  console.error(`error: unknown command "${command}"\n\n${topHelp()}`);
+  process.exit(1);
 }
 
 try {
-  if (command === 'build') await build();
-  else await serve(dir, Number(o.port ?? process.env.PORT ?? 8081), log);
+  const { values, positionals } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: { ...spec.options, help: { type: 'boolean', short: 'h' } },
+  });
+  if (values.help) {
+    process.stdout.write(`${spec.usage}\n${spec.help}\n`);
+    process.exit(0);
+  }
+  await spec.run(values, positionals);
 } catch (e) {
-  console.error(`error: ${e.message}`);
+  if (e.code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION') {
+    const flag = e.message.match(/'(-[^']+)'/)?.[1] ?? 'option';
+    console.error(`error: unknown option ${flag} for "deck ${command}" (see: deck ${command} --help)`);
+  } else {
+    console.error(`error: ${e.message}`);
+  }
   process.exit(1);
 }

@@ -1,12 +1,11 @@
 {
-  "name": "deck",
-  "version": "1.0.0",
+  "name": "@meefik/deck",
+  "version": "0.1.0",
   "private": true,
   "description": "Markdown slides to HTML, PDF and narrated video",
   "scripts": {
     "build": "node src/cli.js build",
-    "dev": "node src/cli.js dev",
-    "video": "node src/cli.js build --formats html,pdf,video"
+    "dev": "node src/cli.js dev"
   },
   "type": "module",
   "bin": {
@@ -17,7 +16,8 @@
   },
   "dependencies": {
     "@marp-team/marp-core": "^4.4.0",
+    "js-yaml": "^5.5.0",
     "markdown-it-container": "^4.0.0",
-    "puppeteer-core": "^24.0.0"
+    "puppeteer-core": "^25.16.0"
   }
 }

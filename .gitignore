@@ -1,4 +1,8 @@
-.claude/
 node_modules/
-__pycache__/
-dist/
+output/
+
+.DS_Store
+.vscode/
+.zed/
+.idea/
+.claude/

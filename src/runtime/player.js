@@ -38,8 +38,8 @@
     render();
   }
 
-  const next = () => (step < fragments(cur) ? go(cur, step + 1) : go(cur + 1, 0));
-  const prev = () => (step > 0 ? go(cur, step - 1) : go(cur - 1, Infinity));
+  const next = () => (step < fragments(cur) ? go(cur, step + 1) : cur < slides.length - 1 && go(cur + 1, 0));
+  const prev = () => (step > 0 ? go(cur, step - 1) : cur > 0 && go(cur - 1, Infinity));
 
   function onKey(e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;

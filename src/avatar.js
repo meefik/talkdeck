@@ -5,20 +5,28 @@ import { hash } from './cache.js';
 const POLL_MS = 5000;
 const SUBMIT_TIMEOUT_MS = 300_000;  // the first call after an idle gap cold-starts the engine (~1-2 min)
 const POLL_TIMEOUT_MS = 1_800_000;
+const QUERY_TIMEOUT_MS = 60_000;
 
 /**
  * Talking-head generation via the avatar service (async task API):
- * POST /v1/video/generate (portrait + audio) -> task_id, POST /v1/video/query until
- * status is 1 (done) / 2 (failed), then GET /v1/video/file. One portrait per call (the
- * face is chosen per slide). `generate` writes `file`, unless `cache` says it was already generated from the same portrait and audio.
+ * POST <base>/generate (portrait + audio) -> task_id, POST <base>/query until
+ * status is 1 (done) / 2 (failed), then GET the result's `file` path (/v1/video/<task_id>).
+ * One portrait per call (the same face for the whole deck). `generate` writes `file`, unless
+ * `cache` says it was already generated from the same portrait and audio.
+ *
+ * `url` is the video API base, e.g. http://127.0.0.1:8010/v1/video; `key`, if set, is sent as a Bearer token.
  */
-export function createAvatar({ url, size, cache, log = () => {} }) {
+export function createAvatar({ url, key, size, cache, log = () => {} }) {
   const base = url.replace(/\/+$/, '');
 
   async function call(method, route, init = {}) {
     let res;
     try {
-      res = await fetch(base + route, { method, ...init });
+      res = await fetch(route.startsWith('http') ? route : base + route, {
+        method,
+        ...init,
+        headers: { ...(key && { Authorization: `Bearer ${key}` }), ...init.headers },
+      });
     } catch (e) {
       throw new Error(`avatar service unreachable at ${base}: ${e.cause?.message ?? e.message}`);
     }
@@ -32,7 +40,7 @@ export function createAvatar({ url, size, cache, log = () => {} }) {
     form.set('audio', new Blob([audioBytes]), 'voice.wav');
     form.set('format', 'mp4');
     form.set('size', String(size));
-    const res = await call('POST', '/v1/video/generate', { body: form, signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS) });
+    const res = await call('POST', '/generate', { body: form, signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS) });
     const { task_id: id } = await res.json();
     if (!id) throw new Error('avatar: no task_id in response');
     return id;
@@ -42,9 +50,10 @@ export function createAvatar({ url, size, cache, log = () => {} }) {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, POLL_MS));
-      const res = await call('POST', '/v1/video/query', {
+      const res = await call('POST', '/query', {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id_list: [id] }),
+        signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
       });
       const body = await res.json();
       let data = Array.isArray(body) ? body : body.data; // a list, or a {data} envelope
@@ -67,10 +76,11 @@ export function createAvatar({ url, size, cache, log = () => {} }) {
     log(`  avatar task ${task} (the first one may take minutes: model cold start)`);
     const item = await poll(task);
     const result = typeof item.result === 'string' ? JSON.parse(item.result) : item.result;
-    // `file` may carry a scheme+host that is the engine's own loopback; keep only ?path= and go through the door.
-    const query = result?.file?.split('?')[1];
-    if (!query) throw new Error(`avatar: succeeded task has no downloadable file: ${JSON.stringify(item).slice(0, 300)}`);
-    const video = await call('GET', `/v1/video/file?${query}`, { signal: AbortSignal.timeout(120_000) });
+    // `file` is an opaque path, "/v1/video/<task_id>" (a legacy "/v1/video/file?path=..." also works): GET it from
+    // the same server. Drop any scheme+host, which could be the engine's own unreachable loopback.
+    if (!result?.file) throw new Error(`avatar: succeeded task has no downloadable file: ${JSON.stringify(item).slice(0, 300)}`);
+    const { pathname, search } = new URL(result.file, base);
+    const video = await call('GET', new URL(pathname + search, base).href, { signal: AbortSignal.timeout(120_000) });
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, Buffer.from(await video.arrayBuffer()));
     await cache.record(file, id);
@@ -82,39 +92,26 @@ const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp'];
 const isFile = (p) => access(p).then(() => true, () => false);
 
 /**
- * Resolve the avatar directive of every slide to a portrait file (or null).
- * `names`: per slide, a name from avatars/, a path relative to the deck dir,
- * 'none', or undefined (falls back to `fallback`). `dirs`: avatar folders, first wins.
+ * Resolve the avatar name from the header to a portrait file: a name from the avatars/ folders
+ * (first dir wins), or a path relative to the deck dir. Returns null for no name or 'none'.
  */
-export async function resolveAvatars(names, { deckDir, dirs, fallback }) {
-  const cache = new Map();
-  const find = async (name) => {
-    for (const d of dirs) {
-      for (const ext of ['', ...IMAGE_EXT]) {
-        const f = path.join(d, name + ext);
-        if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await isFile(f))) return f;
-      }
-    }
-    const f = path.resolve(deckDir, name);
-    if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await isFile(f))) return f;
-    const known = [];
-    for (const d of dirs) {
-      try {
-        known.push(...(await readdir(d)).filter((x) => IMAGE_EXT.includes(path.extname(x).toLowerCase())).map((x) => path.parse(x).name));
-      } catch {}
-    }
-    throw new Error(`unknown avatar "${name}" (available: ${[...new Set(known)].join(', ') || 'none'})`);
-  };
-  const out = [];
-  for (const raw of names) {
-    const name = raw ?? fallback;
-    if (!name || name === 'none') out.push(null);
-    else {
-      if (!cache.has(name)) cache.set(name, await find(name));
-      out.push(cache.get(name));
+export async function resolveAvatar(name, { deckDir, dirs }) {
+  if (!name || name === 'none') return null;
+  for (const d of dirs) {
+    for (const ext of ['', ...IMAGE_EXT]) {
+      const f = path.join(d, name + ext);
+      if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await isFile(f))) return f;
     }
   }
-  return out;
+  const f = path.resolve(deckDir, name);
+  if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await isFile(f))) return f;
+  const known = [];
+  for (const d of dirs) {
+    try {
+      known.push(...(await readdir(d)).filter((x) => IMAGE_EXT.includes(path.extname(x).toLowerCase())).map((x) => path.parse(x).name));
+    } catch {}
+  }
+  throw new Error(`unknown avatar "${name}" (available: ${[...new Set(known)].join(', ') || 'none'})`);
 }
 
 const NAMED = { white: '#ffffff', black: '#000000' };
@@ -132,5 +129,5 @@ export const invertColor = (c) =>
   '#' + [1, 3, 5].map((i) => (255 - parseInt(parseColor(c).slice(i, i + 2), 16)).toString(16).padStart(2, '0')).join('');
 
 // Slides whose background is dark: the `invert` theme, and the gradient layouts.
-const DARK = ['invert', 'lead', 'divider', 'quote'];
+const DARK = ['invert', 'lead']; // divider and quote are light unless combined with invert
 export const isDarkSlide = (classes) => String(classes ?? '').split(/\s+/).some((c) => DARK.includes(c));

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marp } from '@marp-team/marp-core';
 import container from 'markdown-it-container';
+import { deckConfig, readFrontMatter } from './config.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const TEMPLATE_DIR = path.resolve(HERE, '..', 'template');
@@ -32,17 +33,17 @@ async function addThemes(marp, dir) {
 
 /**
  * Read `<dir>/slides.md` and render it.
- * Returns { html, css, notes, title, size, assetsDir } where `notes` is an
+ * Returns { html, css, notes, title, size, config } where `notes` is an
  * array (one entry per slide) of arrays of note lines (the HTML comments
- * that are not Marp directives), and the `avatars` / `voices` directives per slide.
+ * that are not Marp directives), and `classes` (the class directive per slide).
  */
 export async function renderDeck(dir) {
   const source = await readFile(path.join(dir, 'slides.md'), 'utf8');
 
   const marp = new Marp({ html: true, script: false }).use(divContainer);
-  // `<!-- _avatar: name -->` (this slide) / `<!-- avatar: name -->` (this and following slides),
-  // likewise `voice`. Registering them keeps the directives out of the speaker notes.
-  for (const name of ['avatar', 'voice']) {
+  // `voice` and `avatar` are header settings. Registering them as Marp directives keeps a stray
+  // `<!-- _voice: x -->` out of the speaker notes (it would be read aloud); we reject it below instead.
+  for (const name of ['voice', 'avatar']) {
     marp.customDirectives.local[name] = (value) => ({ [name]: String(value) });
   }
   await addThemes(marp, BUNDLED_THEMES);
@@ -52,18 +53,25 @@ export async function renderDeck(dir) {
   const directives = marp.markdown.parse(source, {})
     .filter((t) => t.type === 'marpit_slide_open')
     .map((t) => t.meta.marpitDirectives);
-  const front = source.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
-  const title = front.match(/^title:\s*(.+?)\s*$/m)?.[1].replace(/^(["'])(.*)\1$/, '$2');
+  const front = readFrontMatter(source);
+  const config = deckConfig(front);
+  directives.forEach((d, i) => {
+    for (const name of ['voice', 'avatar']) {
+      const expected = front[name] === undefined || front[name] === null ? undefined : String(front[name]);
+      if (d[name] !== expected) {
+        throw new Error(`slide ${i + 1}: "${name}" cannot be set per slide; set "${name}:" in the header of slides.md`);
+      }
+    }
+  });
   const [, w, h] = html.match(/viewBox="0 0 (\d+) (\d+)"/) ?? [, 1280, 720];
 
   return {
     html,
     css,
     notes: comments,
-    avatars: directives.map((d) => d.avatar), // per slide: name, 'none', or undefined
-    voices: directives.map((d) => d.voice),   // per slide: voice name or undefined
     classes: directives.map((d) => String(d.class ?? '')), // per slide: the `class` directive
-    title: title || path.basename(path.resolve(dir)),
+    title: typeof front.title === 'string' && front.title ? front.title : path.basename(path.resolve(dir)),
+    config, // voice, tts and avatar settings from the front matter
     size: { width: Number(w), height: Number(h) },
   };
 }

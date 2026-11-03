@@ -1,7 +1,9 @@
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { renderDeck, toPage } from './render.js';
+import { renderDeck, toPage, TEMPLATE_DIR } from './render.js';
+
+const BUNDLED_THEMES = path.join(TEMPLATE_DIR, 'themes');
 
 const TYPES = {
   '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json',
@@ -14,12 +16,19 @@ const TYPES = {
 const RELOAD = `<script>(async()=>{const v=()=>fetch('/__version').then(r=>r.text());let c=await v();
 setInterval(async()=>{try{if(await v()!==c)location.reload()}catch{}},800)})()</script>`;
 
+// newest mtime in a file or, recursively, a folder (a folder's own mtime ignores edits to files inside)
+async function newestMtime(p) {
+  let s;
+  try { s = await stat(p); } catch { return 0; }
+  if (!s.isDirectory()) return s.mtimeMs;
+  let newest = s.mtimeMs;
+  for (const f of await readdir(p).catch(() => [])) newest = Math.max(newest, await newestMtime(path.join(p, f)));
+  return newest;
+}
+
 async function version(dir) {
-  let newest = 0;
-  for (const f of ['slides.md', 'themes', 'assets']) {
-    try { newest = Math.max(newest, (await stat(path.join(dir, f))).mtimeMs); } catch {}
-  }
-  return String(newest);
+  const watched = [path.join(dir, 'slides.md'), path.join(dir, 'themes'), path.join(dir, 'assets'), BUNDLED_THEMES];
+  return String(Math.max(...(await Promise.all(watched.map(newestMtime)))));
 }
 
 export async function serve(dir, port, log) {
@@ -35,7 +44,8 @@ export async function serve(dir, port, log) {
         return res.end(page);
       }
       const file = path.join(dir, decodeURIComponent(url.pathname));
-      if (!file.startsWith(dir + path.sep) || file.includes(`${path.sep}dist${path.sep}`)) throw Object.assign(new Error(), { code: 'ENOENT' });
+      const rel = path.relative(dir, file);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || rel.split(path.sep)[0] === 'output') throw Object.assign(new Error(), { code: 'ENOENT' });
       res.setHeader('Content-Type', TYPES[path.extname(file)] ?? 'application/octet-stream');
       res.end(await readFile(file));
     } catch (e) {

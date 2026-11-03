@@ -6,7 +6,6 @@
  */
 
 @import 'default';
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
 /* ---------- Design tokens ---------- */
 
@@ -20,8 +19,11 @@ section {
   --color-accent-soft: #eef2ff;
   --color-border: #e5e7eb;
   --color-surface: #f6f7fb;
-  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-string: #0d9488;
+  --color-number: #d97706;
+  --color-shadow: rgba(15, 18, 34, 0.35);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   display: flex;
   flex-direction: column;
@@ -45,9 +47,9 @@ section.invert {
   --color-accent-soft: rgba(165, 180, 252, 0.14);
   --color-border: #262b45;
   --color-surface: #171b31;
-
-  background: var(--color-bg);
-  color: var(--color-fg);
+  --color-string: #5eead4;
+  --color-number: #fbbf24;
+  --color-shadow: rgba(0, 0, 0, 0.6);
 }
 
 /* ---------- Typography ---------- */
@@ -120,7 +122,6 @@ section > h2::after {
 p,
 ul,
 ol,
-blockquote,
 table,
 pre {
   margin: 0 0 0.8em;
@@ -221,9 +222,22 @@ table tr:nth-child(2n) td {
   background: var(--color-surface);
 }
 
+/* Dense table: <!-- _class: compact --> for tables with many or long rows */
+section.compact table {
+  font-size: 0.8em;
+}
+
+section.compact table th,
+section.compact table td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
 /* ---------- Quotes ---------- */
 
 blockquote {
+  margin-top: 1.2em;
+  margin-bottom: 1.2em;
   padding: 28px 36px;
   border: 0;
   border-left: 6px solid var(--color-accent);
@@ -288,14 +302,10 @@ section.lead {
   --color-accent-2: rgba(255, 255, 255, 0.5);
   --color-accent-soft: rgba(255, 255, 255, 0.16);
 
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   background:
     radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.18), transparent 38%),
     radial-gradient(circle at 10% 110%, rgba(236, 72, 153, 0.35), transparent 45%),
     linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-  color: var(--color-fg);
 }
 
 section.lead h1 {
@@ -365,6 +375,7 @@ section.quote blockquote::before {
 
 section.quote blockquote {
   position: relative;
+  margin: 0 0 0.8em;
   padding: 0;
   border: 0;
   background: none;
@@ -409,6 +420,11 @@ section.quote blockquote + p::before {
 .columns.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 40px;
+}
+
+/* stacked rows of cards */
+.columns + .columns {
+  margin-top: 20px;
 }
 
 .card {
@@ -484,6 +500,7 @@ section.quote blockquote + p::before {
   margin: 24px 0;
 }
 
+.compare::before,
 .compare::after {
   content: '';
   position: absolute;
@@ -491,18 +508,18 @@ section.quote blockquote + p::before {
   left: 50%;
   width: 48px;
   height: 48px;
-  border-radius: 50%;
-  /* SVG arrow (not a text glyph) so it is optically centred regardless of font metrics */
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 24px 24px no-repeat,
-    var(--color-accent);
   transform: translate(-50%, -50%);
 }
 
-section.invert .compare::after {
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f1222' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 24px 24px no-repeat,
-    var(--color-accent);
+.compare::before {
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+/* SVG arrow (not a text glyph) so it is optically centred regardless of font metrics */
+.compare::after {
+  background: var(--color-bg);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 24px 24px no-repeat;
 }
 
 .compare .card {
@@ -541,6 +558,7 @@ section.invert .compare::after {
   gap: 32px;
 }
 
+.compare.plain::before,
 .compare.plain::after {
   display: none;
 }
@@ -586,31 +604,19 @@ section.code pre + p {
 .hljs-string,
 .hljs-attr,
 .hljs-addition {
-  color: #0d9488;
+  color: var(--color-string);
 }
 
 .hljs-number,
 .hljs-literal,
 .hljs-symbol {
-  color: #d97706;
+  color: var(--color-number);
 }
 
 .hljs-title,
 .hljs-function,
 .hljs-section {
   color: var(--color-accent);
-}
-
-section.invert .hljs-string,
-section.invert .hljs-attr,
-section.invert .hljs-addition {
-  color: #5eead4;
-}
-
-section.invert .hljs-number,
-section.invert .hljs-literal,
-section.invert .hljs-symbol {
-  color: #fbbf24;
 }
 
 /* ---------- Figure: framed screenshot ----------
@@ -641,7 +647,7 @@ section.invert .hljs-symbol {
   max-height: 340px;
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  box-shadow: 0 18px 40px -12px rgba(15, 18, 34, 0.35);
+  box-shadow: 0 18px 40px -12px var(--color-shadow);
 }
 
 .figure p:has(img) + p,
@@ -649,10 +655,6 @@ section.invert .hljs-symbol {
   margin-top: 18px;
   color: var(--color-muted);
   text-align: center;
-}
-
-section.invert .figure img {
-  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
 }
 
 /* ---------- Agenda: numbered list of sections ----------
@@ -697,7 +699,6 @@ section.invert .figure img {
   letter-spacing: -0.02em;
 }
 
-
 /* ---------- Steps: numbered process ----------
    <div class="steps">
 
@@ -732,10 +733,6 @@ section.invert .figure img {
   list-style: none;
 }
 
-.steps li::marker {
-  content: '';
-}
-
 .steps li::before {
   content: counter(step);
   position: absolute;
@@ -754,7 +751,7 @@ section.invert .figure img {
   font-size: 26px;
   font-weight: 800;
   line-height: 1;
-  /* fallback: Inter's digits sit ~2px high in a flex-centred line box */
+  /* fallback: digits can sit ~2px high in a flex-centred line box */
   padding-top: 4px;
 }
 

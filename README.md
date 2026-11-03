@@ -9,31 +9,34 @@ slides engine (so Marp syntax, directives and themes work); everything else
 
 ```bash
 npm install
-node src/cli.js build [dir]                 # <dir>/dist/slides.html + slides.pdf
-node src/cli.js build [dir] -o out          # choose the output directory
-node src/cli.js build [dir] --video         # also slides.mp4 (voice-over)
-node src/cli.js dev [dir]                   # live preview, http://localhost:8081/
+npm run dev                         # live preview, http://localhost:8081/
+npm run build                       # ./output/slides.html
+npm run build -- --pdf --video      # + slides.pdf and slides.mp4 (voice-over, avatars)
 ```
 
-`[dir]` is a directory with `slides.md` and (optionally) `assets/` and
-`themes/*.css`; it defaults to the bundled `template/`. It is also installable as a command: `npm link` → `deck build [dir]`.
-`npm run build`, `npm run dev` and `npm run video` use the template.
+Options go after `--`: `--pdf`, `--video`, `--slides 1-2` (just those slides),
+`-o out` (the output directory), and a `[dir]` with the deck. `[dir]` is a
+directory with `slides.md` and (optionally) `assets/`, `themes/*.css`,
+`avatars/` and `voices/`. If omitted it is the current folder when that has a
+`slides.md`, otherwise the bundled `template/`. The output directory defaults
+to `./output`. `slides.html` is always written; the PDF and the video are opt-in.
 
 Output directory:
 
 | File | Notes |
 | --- | --- |
-| `slides.html` | standalone player + `assets/` copy; always written (PDF and video are rendered from it) |
-| `slides.pdf` | one page per slide, all reveals shown |
-| `slides.mp4` | 1920×1080, one still per slide + voice-over, fades between slides |
-| `slides/slideNN.png` | video only: a 1920×1080 frame per slide |
-| `voiceovers/slideNN.wav` | video only: the voice-over per slide |
-| `avatars/slideNN.mp4` | video with avatars: the generated head per slide |
+| `slides.html` | standalone player + `assets/` copy; always written (the PDF and video are rendered from it) |
+| `slides.pdf` | `--pdf`: one page per slide, all reveals shown |
+| `slides.mp4` | `--video`: 1920×1080, one still per slide + voice-over, fades between slides (`slides-<list>.mp4` with `--slides`) |
+| `slides/slideNN.png` | `--video`: a 1920×1080 frame per slide |
+| `voiceovers/slideNN.wav` | `--video`: the voice-over per slide |
+| `avatars/slideNN.mp4` | `--video`, with avatars: the generated head per slide |
+| `segments/slideNN.mkv` | `--video`: the encoded clip per slide (reused while unchanged), joined into the mp4; `list.txt` is the join list |
 | `.cache.json` | what the generated files were made from (don't edit) |
 
-PDF and video need Chrome, Chromium or Edge (set `CHROME_PATH` if it is not on
+PDF and video need Chrome, Chromium or Edge (set `CHROMIUM_PATH` if it is not on
 `PATH`); video also needs `ffmpeg`/`ffprobe`. The themes in `template/themes/`
-(`modern`) are always available; a `themes/` folder inside `[dir]` adds to or
+(`modern`, which uses system fonts, so decks build offline) are always available; a `themes/` folder inside `[dir]` adds to or
 overrides them.
 
 ## HTML player and presenter mode
@@ -57,40 +60,78 @@ visible content
 ## Voice-overs and video
 
 The same note comments are the script for the voice-over (no separate text
-files). Each slide is narrated through an OpenAI-compatible `/audio/speech` API.
-The default is **qwentts** (model `qwen-tts`) behind the local fleet door:
+files). `npm run build -- --video` narrates each slide through an OpenAI-compatible
+`/audio/speech` API (default: **qwentts**, model `qwen-tts`, on a local service) and can put a talking head on each slide:
 
 ```bash
-node src/cli.js build [dir] --video
-node src/cli.js build [dir] --video --slides 1-2     # just slides 1-2, for review
+npm run build -- --video
+npm run build -- --video --slides 1-2     # just slides 1-2, for review
 ```
 
-| Option | Env | Default |
-| --- | --- | --- |
-| `--tts-url` | `DECK_TTS_URL` | `http://127.0.0.1:8010/v1` |
-| `--tts-key` | `DECK_TTS_KEY` | – |
-| `--tts-model` | `DECK_TTS_MODEL` | `qwen-tts` |
-| `--voice` | `DECK_VOICE` | – (the default narrator) |
-| `--tts-seed` | `DECK_TTS_SEED` | – (qwen-tts only) |
-| `--speed` | `DECK_SPEED` | `1.0` (not used by qwen-tts) |
-| `--silent <s>` | – | `3` (seconds for slides with no notes) |
+The CLI has `-o`, `--pdf`, `--video` and `--slides`. **Everything else about the voice and the avatar
+is set in the header of `slides.md`** (the front matter), so a deck builds the
+same way for everyone. It is one voice and one face for the whole deck; a
+`voice` or `avatar` comment on a single slide is an error:
 
-**Voices.** qwentts has no fixed voice list: a voice is a *description*.
-Without one you get the default narrator; with one (`warm, calm female
-narrator`) the slide is spoken by a voice designed from it. Set it per slide
-with a directive next to the notes, the same way as the avatar (`_voice` = this
-slide, `voice` = this and the following slides, front matter = deck default;
-`--voice` is used where there is none; `default` = back to the default narrator):
-
-```markdown
-<!-- _voice: deep, measured male narrator -->
-<!-- Hi everyone, -->
+```yaml
+---
+marp: true
+theme: modern
+voice: maria                    # a sample name or a description
+silent-duration: 3              # seconds shown for slides without notes
+avatar: maria                   # a file in avatars/ ("none" or omitted = no avatar)
+tts-model: qwen-tts
+tts-speed: 1                    # not used by qwen-tts
+avatar-size: 512                # generated head, px (2..1920)
+avatar-diameter: 0.26           # on screen, fraction of the frame height
+avatar-position: top-right      # top-left, bottom-right, bottom-left
+avatar-border: 6                # px at 1080p, scales with the frame; 0 = none
+avatar-border-color: black      # white, black, "#rgb", "#rrggbb" (quote hex values: an unquoted # is a YAML comment)
+---
 ```
 
-A designed voice is generated fresh for every slide, so timbre can drift a
-little between slides. Other models work too: with e.g. `--tts-model kokoro`
-the voice is a voice name (`af_bella`) and `--speed` applies. Voice-overs are
-stored as wav.
+All keys are optional (the values above are the defaults, except `voice`
+and `avatar`); a wrong value fails the build and names the key.
+
+**The services are set in the environment**, not in the deck, because the
+addresses depend on the machine:
+
+| Variable | Default |
+| --- | --- |
+| `DECK_TTS_URL` | `http://127.0.0.1:8010/v1/audio` (requests go to `<url>/speech`) |
+| `DECK_AVATAR_URL` | `http://127.0.0.1:8010/v1/video` |
+| `DECK_TTS_KEY` | – (API key for the voice-over service, if it needs one) |
+| `DECK_AVATAR_KEY` | – (API key for the talking-head service, if it needs one) |
+
+A `tts-url` or `avatar-url` key in the header is an error that points here.
+
+**Voices.** qwentts has no fixed voice list, so a voice is a *sample* that gets
+cloned. Samples live in `voices/` (`[dir]/voices/` first, then `template/voices/`):
+`<name>.wav` (10-15 s, one clean speaker) plus `<name>.txt` (what it says). The
+template ships `maria` (female) and `leon` (male). Create your own from a
+description, once:
+
+```bash
+npx deck voice maria template --describe "warm, calm female narrator" --force   # -> template/voices/maria.wav (replaces the bundled one)
+npx deck voice anna ./my-talk --describe "young, upbeat voice"          # -> ./my-talk/voices/anna.wav
+```
+
+Without `[dir]` it writes into the current folder, but only if that has a
+`slides.md` (it never writes into the bundled template unless you name it).
+Use `--force` to replace a sample (that changes the voice for every deck that
+uses it) and `--text` to change what it says. `--tts-seed <n>` fixes the seed, so the same
+description gives the same voice again. The service is `DECK_TTS_URL`.
+
+Name the sample as `voice:` in the header.
+
+Every slide is then spoken by a clone of the same sample, so the voice stays the
+same across the deck. Clones live in the engine's memory only; the build
+registers them when needed and again if the engine forgot them. An unknown
+name fails the build and lists the samples. A value with spaces ("warm, calm
+female narrator") is treated as a description and designed fresh for every
+slide, which is quicker to try but drifts a little between slides. Other
+models work too: with e.g. `tts-model: kokoro` the voice is a voice name
+(`af_bella`) and `tts-speed` applies. Voice-overs are stored as wav.
 
 Notes are normalised for speech (numbers and `%` spelled out, markup stripped).
 Generated files are kept in the output directory (see above). `<out>/.cache.json`
@@ -99,55 +140,43 @@ that slide.
 
 ## Avatar
 
-Each slide can have a talking head, chosen right where its voice-over text
-lives, with a Marp directive:
+Set `avatar:` in the header to put a talking head on every slide (leave it out,
+or write `avatar: none`, for no avatar):
 
-```markdown
+```yaml
 ---
-avatar: maria            # deck default (front matter)
+avatar: maria
 ---
-
-<!-- _avatar: leon -->   <!-- this slide only -->
-<!-- avatar: leon -->    <!-- this slide and the following ones -->
-<!-- _avatar: none -->   <!-- no avatar on this slide -->
 ```
 
 The name is a portrait in `avatars/` (`png`, `jpg` or `webp`; `[dir]/avatars/`
 first, then `template/avatars/`). An unknown name fails the build and lists the
 available ones. Avatars only appear in the video: each slide's voice-over and
 portrait are sent to the avatar (talking-head) service, and the lip-synced head
-video is composited as a circle with a border in a corner of that slide.
+video is composited as a circle with a border in a corner of that slide (the
+`avatar-*` header keys above set where, how big, and the border). The border
+color is for light slides; dark slides (`invert`, `lead`) get
+the inverse color.
 
-```bash
-node src/cli.js build [dir] --video                 # uses the avatar directives
-node src/cli.js build [dir] --avatar maria          # default face for slides without a directive (implies --video)
-node src/cli.js build [dir] --video --no-avatar     # ignore the directives
-```
-
-The service is an async task API (`POST /v1/video/generate` → poll
-`/v1/video/query` → `GET /v1/video/file`). The first request after an idle gap
+The service is an async task API (`POST <DECK_AVATAR_URL>/generate` → poll
+`<DECK_AVATAR_URL>/query` → `GET /v1/video/<task_id>`). The first request after an idle gap
 cold-starts the engine (1–2 min), and generation runs at roughly 5× realtime,
 one job at a time, so a full deck takes a while. Heads are cached in
-`<out>/avatars/` and reused while the portrait and audio are unchanged. Slides without notes get no avatar.
-
-| Option | Default |
-| --- | --- |
-| `--avatar-url` (`DECK_AVATAR_URL`) | `http://127.0.0.1:8010` |
-| `--avatar-size` | `512` (generated px; 2..1920) |
-| `--avatar-diameter` | `0.26` (fraction of frame height) |
-| `--avatar-position` | `top-right` (`top-left`, `bottom-right`, `bottom-left`) |
-| `--avatar-border` | `6` (px at 1080p, scales with the frame; `0` = no border) |
-| `--avatar-border-color` | `black` on light slides (`white`, `black`, `#rgb`, `#rrggbb`); dark slides (`invert`, `lead`, `divider`, `quote`) get the inverse, so white by default |
+`<out>/avatars/` and reused while the portrait and audio are unchanged. Slides
+without notes get no avatar.
 
 ## Files
 
-- `template/` — default input: `slides.md`, `assets/`, `avatars/`, `themes/modern.css`
+- `template/` — default input: `slides.md`, `assets/`, `avatars/` (faces), `voices/` (voice samples), `themes/modern.css`
 - `src/cli.js` — commands and options
+- `src/config.js` — header (front matter) settings and their validation
+- `src/cache.js` — the `.cache.json` manifest of generated files
 - `src/render.js` — Markdown → slides, HTML page, assets
 - `src/runtime/` — player script and CSS inlined into `slides.html`
 - `src/pdf.js`, `src/browser.js` — PDF export via headless Chrome
-- `src/notes.js`, `src/tts.js`, `src/avatar.js`, `src/video.js` — voice-over, avatar and video pipeline
+- `src/notes.js`, `src/tts.js`, `src/voices.js`, `src/avatar.js`, `src/video.js` — voice-over, avatar and video pipeline
 - `src/dev.js` — live-reload preview server
+- `SKILL.md` — instructions for AI agents using this CLI
 
 ## Cheatsheet
 
@@ -173,6 +202,7 @@ one job at a time, so a full deck takes a while. Heads are cached in
 | `::: figure` + `![](shot.png)` + caption paragraph | Framed screenshot: rounded border, shadow, centered caption (image is capped at 340px tall) |
 | `::: agenda` + ordered list `1. **Section** text` | Agenda with large gradient numbers and divider lines |
 | Markdown table | Styled table with a header row and zebra stripes (3–4 columns max) |
+| `<!-- _class: compact -->` | Denser table (smaller text and padding) for many or long rows |
 | `> text` on a regular slide | Callout box; put it after a paragraph |
 | `![bg brightness:0.5 blur:6px](img.png)` | Full-bleed background with filters, so a title stays readable (`brightness`, `blur`, `opacity`, …) |
 

@@ -6,6 +6,7 @@ import container from 'markdown-it-container';
 import { deckConfig, readFrontMatter } from './config.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+// the bundled template/ sits next to src/
 export const TEMPLATE_DIR = path.resolve(HERE, '..', 'template');
 const BUNDLED_THEMES = path.join(TEMPLATE_DIR, 'themes');
 
@@ -81,7 +82,7 @@ const escapeScriptJson = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 /** Wrap a rendered deck into a standalone HTML page (player + presenter mode). */
-export async function toPage(deck) {
+async function toPage(deck) {
   const [playerCss, playerJs] = await Promise.all([read('player.css'), read('player.js')]);
   return `<!doctype html>
 <html lang="en">

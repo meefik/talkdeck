@@ -1,0 +1,53 @@
+# deck-tts — Qwen3-TTS (official model) behind an OpenAI-compatible server.
+#
+# Two variants, built from this one file by choosing BASE:
+#
+#   VARIANT=cuda  BASE=pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+#                 (the official NVIDIA PyTorch base, torch 2.5.1 — matches
+#                  Ditto's environment.yaml; the common case for a non-fleet user)
+#   VARIANT=rocm  BASE=rocm/pytorch:rocm7.14_ubuntu24.04_py3.13_pytorch_release_2.12.0
+#                 (the AMD ROCm PyTorch base + the hsa_fix preload)
+#
+# The entrypoint sets the hsa_fix LD_PRELOAD only when DECK_VARIANT=rocm, so the
+# CUDA variant never loads the ROCm-only libraries.
+#
+# The model weights are NOT baked in (a ~10 GB image is a poor pull). Seed the
+# mounted /models volume with `huggingface-cli download` (see the README); the
+# server loads them from the paths in QWEN_BASE_MODEL / QWEN_VD_MODEL.
+
+# The base image, chosen per variant (see build.sh).
+ARG BASE=pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+FROM ${BASE}
+
+# Bake the variant so the entrypoint can gate the hsa_fix preload on it.
+ARG VARIANT=cuda
+ENV DECK_VARIANT=${VARIANT}
+ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# The hsa_fix (the ROCR 1.18 runtime + the 15-stub shim) is baked in for the
+# ROCm variant; it is never loaded on CUDA (the entrypoint gates LD_PRELOAD).
+# The builder image is the fleet's projects/fleet/build/hsa_fix (bash build.sh);
+# the tag prefix varies by tool (podman stores it as localhost/mirafleet/...).
+ARG HSABASE=mirafleet/hsa-fix-build:latest
+COPY --from=${HSABASE} /out/ /opt/hsa_fix/
+
+# qwen-tts (official, from PyPI) + soundfile (the wav output); librosa is a
+# qwen-tts dep. ffmpeg decodes the reference audio; sox is a qwen-tts dep
+# (the Python `sox` wrapper wants the CLI binary).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg sox \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install "qwen-tts==0.1.1" soundfile
+
+COPY tts-server.py /opt/tts-server.py
+COPY entrypoint.sh /entrypoint.sh
+# Run via sh (the FUSE mount stores files without an exec bit; `sh script` needs none).
+
+ENV PORT=8008 \
+    QWEN_BASE_MODEL=/models/Qwen3-TTS-12Hz-1.7B-Base \
+    QWEN_VD_MODEL=/models/Qwen3-TTS-12Hz-1.7B-VoiceDesign \
+    QWEN_LOAD=base,voicedesign
+
+EXPOSE 8008
+ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
+CMD ["python3", "/opt/tts-server.py"]

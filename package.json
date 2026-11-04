@@ -1,11 +1,10 @@
 {
   "name": "@meefik/deck",
   "version": "0.1.0",
-  "private": true,
   "description": "Markdown slides to HTML, PDF and narrated video",
+  "license": "MIT",
   "scripts": {
-    "build": "node src/cli.js build",
-    "dev": "node src/cli.js dev"
+    "deck": "node src/cli.js"
   },
   "type": "module",
   "bin": {

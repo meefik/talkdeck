@@ -1,39 +1,47 @@
 ---
 name: deck
-description: Build slide decks from Markdown with this repo's `deck` CLI (Marp Core + a small Node renderer). Use when asked to create, edit, preview or export a presentation, slides, or a narrated video of slides to HTML, PDF or MP4 with voice-over and an avatar, or to add speaker notes, voices or themes to a deck.
+description: Build slide decks from Markdown with the `deck` CLI (Marp Core + a small Node renderer). Use when asked to create, edit, preview or export a presentation, slides, or a narrated video of slides to HTML, PDF or MP4 with voice-over and an avatar, or to add speaker notes, voices or themes to a deck.
 ---
 
 # Deck generator
 
 `slides.md` (Markdown, Marp syntax + extra containers) → `slides.html` (player with presenter mode), optionally `slides.pdf` and `slides.mp4` (voice-over from the speaker notes, optional talking-head avatar).
 
-Use the `deck` CLI through `npx` (`npx deck <command>`); do not invent other commands. Run `npx deck <command> --help` for exact options. Commands: `build`, `dev`, `voice`.
+Use the `deck` CLI (`deck <command>`); do not invent other commands. Run `deck <command> --help` for exact options. Commands: `init`, `make`, `voice`.
 
-Setup: `npx deck` resolves the `deck` bin of the installed package, so run `npm install` first in the repo (Node ≥ 20). To use it from another folder, point npx at the repo: `npx --package /path/to/deck deck build` (or add it as a dependency with `npm i -D /path/to/deck`, after which plain `npx deck` works there). `npm run build` / `npm run dev` inside the repo are equivalent shortcuts for `npx deck build` / `npx deck dev`.
+Setup: the package is not on npm, it is installed from GitHub (Node ≥ 20). Check `deck --help` (or `npx deck --help` in a project that has it as a dependency) first; if it is missing, install it:
+
+```bash
+npm install -g github:meefik/deck      # global `deck` command
+npm install -D github:meefik/deck      # or per project; then run it as `npx deck`
+npx github:meefik/deck make [dir]      # or one-off, nothing installed
+```
+
+Inside a clone of the repo, run `npm install` once; `npm run deck --` is the same as `deck` there (e.g. `npm run deck -- make --pdf`).
 
 ## Workflow
 
-1. **Pick the deck folder.** A folder with `slides.md` and optional `assets/`, `themes/*.css`, `avatars/`, `voices/`. Create a new one by copying `template/slides.md` (and any `template/assets` you reuse), e.g. `my-talk/`. With no `[dir]`, the CLI uses the current folder if it has a `slides.md`, otherwise the bundled `template/`. `template/` themes, avatars and voices are always available; the deck folder adds to or overrides them.
-2. **Write `slides.md`.** Start from `template/slides.md` — it demonstrates every layout; copy the slide you need rather than writing HTML.
+1. **Pick the deck folder.** A folder with `slides.md` and optional `assets/`, `themes/*.css`, `avatars/`, `voices/`. Create a new one with `deck init my-talk` (copies the template's `slides.md` and `assets/` into `my-talk/`; refuses to overwrite an existing `slides.md`). With no `[dir]`, the CLI uses the current folder if it has a `slides.md`, otherwise the bundled `template/`. `template/` themes, avatars and voices are always available; the deck folder adds to or overrides them.
+2. **Write `slides.md`.** Start from the copy `deck init` made — it demonstrates every layout; copy the slide you need rather than writing HTML.
 3. **Check the result.** Build and look at it (see below). Do not claim a layout works without building.
 4. **Export** only what was asked.
 
 ## Commands
 
 ```bash
-npx deck build [dir]                       # ./output/slides.html (always written)
-npx deck build [dir] --pdf                 # + slides.pdf (one page per slide, reveals shown)
-npx deck build [dir] --video               # + slides.mp4 (1920x1080, voice-over, avatar)
-npx deck build [dir] --video --slides 1-2  # only these slides (1,3,5-7 also fine) → slides-1-2.mp4
-npx deck build [dir] -o out                # output directory (default ./output)
-npx deck dev [dir] [--port N]              # live preview at http://localhost:8081/, auto-reload
-npx deck voice <name> [dir] --describe "warm, calm female narrator" [--text ...] [--tts-seed N] [--force]
+deck init [dir]                       # new deck: slides.md + assets/ copied from the template
+deck make [dir]                       # ./output/slides.html (always written)
+deck make [dir] --pdf                 # + slides.pdf (one page per slide, reveals shown)
+deck make [dir] --video               # + slides.mp4 (1920x1080, voice-over, avatar)
+deck make [dir] --video --slides 1-2  # only these slides (1,3,5-7 also fine) → slides-1-2.mp4
+deck make [dir] -o out                # output directory (default ./output)
+deck voice <name> [dir] --describe "warm, calm female narrator" [--text ...] [--tts-seed N] [--force]
 ```
 
-- With the `npm run` shortcuts, options go **after `--`**; with `npx deck` they don't.
+- With `npm run deck`, the command and its options go **after `--`** (`npm run deck -- make --pdf`); with `deck` / `npx deck` there is no `--`.
 - `--slides` requires `--video`.
 - `--pdf` needs Chrome/Chromium/Edge (set `CHROMIUM_PATH` if not on `PATH`); `--video` also needs `ffmpeg`/`ffprobe`.
-- Output (`output/` is git-ignored): `slides.html`, `assets/`, `slides.pdf`, `slides.mp4` (`slides-<list>.mp4` with `--slides`), `slides/slideNN.png`, `voiceovers/slideNN.wav`, `avatars/slideNN.mp4`, `segments/slideNN.mkv`, `.cache.json` (never edit it; it makes rebuilds regenerate only changed slides).
+- Output (`output/` is git-ignored): `slides.html`, `assets/`, `slides.pdf`, `slides.mp4` (`slides-<list>.mp4` with `--slides`; commas become `_`), `slides/slideNN.png`, `voiceovers/slideNN.wav`, `avatars/slideNN.mp4`, `segments/slideNN.mkv`, `.cache.json` (never edit it; it makes rebuilds regenerate only changed slides).
 
 ## Slide syntax
 
@@ -103,7 +111,7 @@ avatar-border-color: black      # white, black, "#rgb", "#rrggbb" (quote hex: an
 ```
 
 - Bundled voices: `maria`, `leon`; bundled avatars: `maria`, `leon`. An unknown name fails the build and lists the available ones. Lookup is `[dir]/voices|avatars/` first, then `template/`.
-- A named sample is cloned, so the voice stays identical across slides. A description is designed fresh per slide (quick to try, drifts). Create a sample once with `deck voice` (needs `[dir]` unless the current folder has `slides.md`; `--tts-seed` reproduces a voice; `--force` replaces one and changes every deck using it).
+- A named sample is cloned, so the voice stays identical across slides. A description is designed fresh per slide (quick to try, drifts). Create a sample once with `deck voice` (needs an existing `[dir]` unless the current folder has `slides.md`; `template` means the bundled template; `--tts-seed` reproduces a voice; `--force` replaces one and changes every deck using it).
 - Avatars only appear in the video.
 
 ## Services (environment, never the deck)
@@ -120,8 +128,8 @@ Never put keys in the repo or in `slides.md`.
 
 ## Tips for agents
 
-- HTML-only requests: `npx deck build [dir]` is enough and needs no external service. Don't run `--video` unless asked; it calls local TTS/avatar services and avatar generation is slow (~5× realtime, one job at a time, 1–2 min cold start). While iterating on narration, use `--video --slides N-M`, and run long builds in the background.
+- HTML-only requests: `deck make [dir]` is enough and needs no external service. Don't run `--video` unless asked; it calls local TTS/avatar services and avatar generation is slow (~5× realtime, one job at a time, 1–2 min cold start). While iterating on narration, use `--video --slides N-M`, and run long builds in the background.
 - If `--video` fails with a connection error, the TTS/avatar service is down or `DECK_*_URL` is wrong — report that rather than retrying or removing the voice/avatar.
-- To see the result, build and open `output/slides.html` (or use `npx deck dev` and the browser tool); for the PDF, check page count equals slide count.
-- Don't edit `output/`, `.cache.json`, or `src/` just to make a deck look different — use a deck-local `themes/*.css` (it adds to or overrides the built-in theme) or `<style scoped>`.
+- To see the result, build and open `output/slides.html` (the browser tool can open it); for the PDF, check page count equals slide count.
+- Don't edit `output/`, `.cache.json`, or the installed package (`src/`, `template/`) just to make a deck look different — use a deck-local `themes/*.css` (it adds to or overrides the built-in theme) or `<style scoped>`.
 - Marp directive reference: https://marpit.marp.app/directives

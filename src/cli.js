@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { access, mkdir } from 'node:fs/promises';
+import { access, cp, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { renderDeck, writeHtml, TEMPLATE_DIR } from './render.js';
 import { writePdf } from './pdf.js';
 import { writeVideo } from './video.js';
 import { resolveAvatar } from './avatar.js';
-import { serve } from './dev.js';
 import { createVoiceSample } from './voices.js';
 
 const log = (m) => console.log(m);
@@ -18,17 +17,23 @@ const ttsUrl = () => env('DECK_TTS_URL') ?? 'http://127.0.0.1:8010/v1/audio';
 const avatarUrl = () => env('DECK_AVATAR_URL') ?? 'http://127.0.0.1:8010/v1/video';
 
 /**
- * The deck folder: the one given, else the current folder if it has a slides.md,
- * else (build, dev) the bundled template/.
+ * The deck folder: the one given (it must exist; "template" always works and means the
+ * bundled template/, also where there is no such folder, e.g. in an installed copy),
+ * else the current folder if it has a slides.md, else (make) the bundled template/.
  */
 async function deckDir(input, { fallbackToTemplate }) {
-  if (input) return path.resolve(input);
+  if (input) {
+    const dir = path.resolve(input);
+    if (await exists(dir)) return dir;
+    if (dir === path.resolve('template')) return TEMPLATE_DIR;
+    throw new Error(`folder not found: ${dir}`);
+  }
   if (await exists(path.resolve('slides.md'))) return path.resolve('.');
   if (fallbackToTemplate) return TEMPLATE_DIR;
   throw new Error('no deck folder: run this inside a folder with slides.md, or pass [dir] (e.g. "template")');
 }
 
-/** Shared by build and video: render slides.md to <out>/slides.html (+ assets/). */
+/** Shared by make and video: render slides.md to <out>/slides.html (+ assets/). */
 async function render(o, input) {
   const dir = await deckDir(input, { fallbackToTemplate: true });
   if (!(await exists(path.join(dir, 'slides.md')))) throw new Error(`no slides.md in ${dir}`);
@@ -51,9 +56,9 @@ function parseSlides(spec, total) {
 }
 
 const COMMANDS = {
-  build: {
+  make: {
     summary: 'render slides.md to HTML, and optionally PDF and a narrated video',
-    usage: 'deck build [dir] [options]',
+    usage: 'deck make [dir] [options]',
     options: {
       out: { type: 'string', short: 'o' },
       pdf: { type: 'boolean' },
@@ -69,7 +74,8 @@ Themes, avatars and voices in template/ are always available; dir adds to or ove
       --pdf                also write slides.pdf (needs Chrome/Chromium/Edge, or CHROMIUM_PATH)
       --video              also write slides.mp4 (needs Chrome/Chromium/Edge and ffmpeg)
       --slides <list>      with --video: just these slides, e.g. 1-2 or 1,3,5-7 (for review);
-                           written to slides-<list>.mp4, files keep the full-deck numbers
+                           written to slides-<list>.mp4 (commas become _: 1,3,5-7 -> slides-1_3_5-7.mp4),
+                           files keep the full-deck numbers
 
 Always writes slides.html (a standalone player with presenter mode) and a copy of assets/.
 The video is 1920x1080, one still per slide plus its voice-over (the speaker notes, i.e. the
@@ -130,18 +136,22 @@ Avatar generation is slow (~5x realtime, one job at a time).`,
     },
   },
 
-  dev: {
-    summary: 'live preview with auto-reload',
-    usage: 'deck dev [dir] [--port N]',
-    options: { port: { type: 'string' } },
+  init: {
+    summary: 'start a new deck: copy the template slides.md and assets/ into a folder',
+    usage: 'deck init [dir]',
+    options: {},
     help: `
-dir: as for "deck build". Serves the deck at http://localhost:<port>/ and reloads when
-slides.md, themes/ or assets/ change.
-
-      --port <n>           env PORT (default 8081)`,
+dir: the folder for the new deck (default: the current folder; created if missing).
+Copies the template's slides.md (it shows every layout) and assets/. The theme, avatars and voices
+stay bundled and are always available. Refuses to overwrite an existing slides.md.`,
     async run(o, [input]) {
-      const dir = await deckDir(input, { fallbackToTemplate: true });
-      await serve(dir, Number(o.port ?? env('PORT') ?? 8081), log);
+      const dir = path.resolve(input ?? '.');
+      const slides = path.join(dir, 'slides.md');
+      if (await exists(slides)) throw new Error(`${slides} exists`);
+      await mkdir(dir, { recursive: true });
+      await cp(path.join(TEMPLATE_DIR, 'slides.md'), slides);
+      await cp(path.join(TEMPLATE_DIR, 'assets'), path.join(dir, 'assets'), { recursive: true, force: false });
+      log(`deck   ${slides}`);
     },
   },
 
@@ -160,7 +170,8 @@ transcript). Use the name as "voice:" in the deck header: every slide is then sp
 this sample, so the voice stays the same across the deck.
 
 dir: the deck folder to write into. Default: the current folder if it has a slides.md; otherwise
-it must be given (e.g. "deck voice maria template" for the bundled template).
+it must be given and exist ("template" always means the bundled template/, e.g.
+"deck voice maria template").
 The voice-over service is DECK_TTS_URL (and DECK_TTS_KEY).
 
       --describe <text>    the voice, e.g. "warm, calm female narrator" (required)

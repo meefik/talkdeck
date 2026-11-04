@@ -4,7 +4,8 @@ import path from 'node:path';
 import { withBrowser } from './browser.js';
 import { speechPerSlide } from './notes.js';
 import { createTts } from './tts.js';
-import { createAvatar, invertColor, isDarkSlide, parseColor } from './avatar.js';
+import { createAvatar, isDarkSlide } from './avatar.js';
+import { invertColor, parseColor } from './color.js';
 import { hash, openCache } from './cache.js';
 
 const PAD = 1.0;    // silence after each voice-over, before the slide fades out (s)

@@ -90,7 +90,7 @@ Use `*` instead of `-` for bullets that reveal one at a time.
 
 
 <!-- Bullets written with an asterisk are revealed one by one in the HTML build. -->
-<!-- In PDF and PPTX exports they all show at once. -->
+<!-- In the PDF and the video they all show at once. -->
 ---
 
 <!-- _class: invert -->
@@ -144,7 +144,7 @@ Every layout is a class on a slide.
 
 ### Portable
 
-Share as HTML, PDF or PPTX.
+Share as HTML, PDF or MP4.
 
 :::
 ::::
@@ -162,7 +162,7 @@ Share as HTML, PDF or PPTX.
 | --- | --- | --- |
 | HTML | Presenting live | Yes |
 | PDF | Sharing | No |
-| PPTX | Editing elsewhere | No |
+| MP4 | Watching on its own | Voice-over |
 
 
 <!-- Tables are styled with a header row and zebra stripes. -->
@@ -300,7 +300,7 @@ The quote slide
 
 1. **Write** the content in Markdown
 2. **Style** it with a theme
-3. **Build** HTML, PDF or PPTX
+3. **Build** HTML, PDF or MP4
 4. **Present** with speaker notes
 
 :::
@@ -380,13 +380,13 @@ color modes
 ::: stat
 ### 3
 export formats
-*HTML, PDF, PPTX*
+*HTML, PDF, MP4*
 :::
 ::::
 
 - **Slide types** cover lists, columns, tables, images, quotes, comparisons, processes and code
 - **Color modes** are light and dark, set per slide
-- **Export formats** are HTML, PDF and PPTX
+- **Export formats** are HTML, PDF and MP4
 
 
 <!-- Stats are big-number tiles — good for a status or results slide. -->

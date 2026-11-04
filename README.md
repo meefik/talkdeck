@@ -1,25 +1,40 @@
-# Modern Deck
+# Deck
 
 Markdown slides rendered by a small Node CLI (`src/`) to **HTML, PDF and a
 narrated MP4**. [Marp Core](https://marpit.marp.app/) is used as the Markdown →
 slides engine (so Marp syntax, directives and themes work); everything else
 (HTML player, presenter mode, PDF, video) is in this repo.
 
+## Install
+
+The package is not published to npm; install it from GitHub (Node ≥ 20):
+
+```bash
+npm install -g github:meefik/deck             # the `deck` command, globally
+npm install -D github:meefik/deck             # or as a dependency of your project (then `npx deck`)
+npx github:meefik/deck make my-talk           # or run it once without installing
+npm install -g github:meefik/deck#v0.1.0      # pin a tag, branch or commit
+```
+
+To hack on it, clone the repo and run `npm install` inside; `npm run deck --` is
+then the same as `deck` (e.g. `npm run deck -- make --pdf`).
+
 ## Usage
 
 ```bash
-npm install
-npm run dev                         # live preview, http://localhost:8081/
-npm run build                       # ./output/slides.html
-npm run build -- --pdf --video      # + slides.pdf and slides.mp4 (voice-over, avatars)
+deck init my-talk                   # new deck: my-talk/slides.md (a copy of the template) + assets/
+deck make my-talk                   # ./output/slides.html
+deck make my-talk --pdf --video     # + slides.pdf and slides.mp4 (voice-over, avatars)
 ```
 
-Options go after `--`: `--pdf`, `--video`, `--slides 1-2` (just those slides),
+Options: `--pdf`, `--video`, `--slides 1-2` (just those slides),
 `-o out` (the output directory), and a `[dir]` with the deck. `[dir]` is a
 directory with `slides.md` and (optionally) `assets/`, `themes/*.css`,
 `avatars/` and `voices/`. If omitted it is the current folder when that has a
 `slides.md`, otherwise the bundled `template/`. The output directory defaults
 to `./output`. `slides.html` is always written; the PDF and the video are opt-in.
+If `deck` is installed as a project dependency rather than globally, prefix the
+commands with `npx` (`npx deck make --pdf`).
 
 Output directory:
 
@@ -27,7 +42,7 @@ Output directory:
 | --- | --- |
 | `slides.html` | standalone player + `assets/` copy; always written (the PDF and video are rendered from it) |
 | `slides.pdf` | `--pdf`: one page per slide, all reveals shown |
-| `slides.mp4` | `--video`: 1920×1080, one still per slide + voice-over, fades between slides (`slides-<list>.mp4` with `--slides`) |
+| `slides.mp4` | `--video`: 1920×1080, one still per slide + voice-over, fades between slides (`slides-<list>.mp4` with `--slides`; commas become `_`: `1,3,5-7` → `slides-1_3_5-7.mp4`) |
 | `slides/slideNN.png` | `--video`: a 1920×1080 frame per slide |
 | `voiceovers/slideNN.wav` | `--video`: the voice-over per slide |
 | `avatars/slideNN.mp4` | `--video`, with avatars: the generated head per slide |
@@ -60,12 +75,12 @@ visible content
 ## Voice-overs and video
 
 The same note comments are the script for the voice-over (no separate text
-files). `npm run build -- --video` narrates each slide through an OpenAI-compatible
+files). `deck make --video` narrates each slide through an OpenAI-compatible
 `/audio/speech` API (default: **qwentts**, model `qwen-tts`, on a local service) and can put a talking head on each slide:
 
 ```bash
-npm run build -- --video
-npm run build -- --video --slides 1-2     # just slides 1-2, for review
+deck make --video
+deck make --video --slides 1-2     # just slides 1-2, for review
 ```
 
 The CLI has `-o`, `--pdf`, `--video` and `--slides`. **Everything else about the voice and the avatar
@@ -112,12 +127,13 @@ template ships `maria` (female) and `leon` (male). Create your own from a
 description, once:
 
 ```bash
-npx deck voice maria template --describe "warm, calm female narrator" --force   # -> template/voices/maria.wav (replaces the bundled one)
-npx deck voice anna ./my-talk --describe "young, upbeat voice"          # -> ./my-talk/voices/anna.wav
+deck voice maria template --describe "warm, calm female narrator" --force   # -> template/voices/maria.wav (replaces the bundled one)
+deck voice anna ./my-talk --describe "young, upbeat voice"          # -> ./my-talk/voices/anna.wav
 ```
 
 Without `[dir]` it writes into the current folder, but only if that has a
-`slides.md` (it never writes into the bundled template unless you name it).
+`slides.md`. `[dir]` must exist; `template` always means the bundled template
+(it never writes there unless you name it).
 Use `--force` to replace a sample (that changes the voice for every deck that
 uses it) and `--text` to change what it says. `--tts-seed <n>` fixes the seed, so the same
 description gives the same voice again. The service is `DECK_TTS_URL`.
@@ -168,14 +184,14 @@ without notes get no avatar.
 ## Files
 
 - `template/` — default input: `slides.md`, `assets/`, `avatars/` (faces), `voices/` (voice samples), `themes/modern.css`
-- `src/cli.js` — commands and options
+- `src/cli.js` — commands (`make`, `init`, `voice`) and options
 - `src/config.js` — header (front matter) settings and their validation
+- `src/color.js` — color parsing for the avatar border
 - `src/cache.js` — the `.cache.json` manifest of generated files
 - `src/render.js` — Markdown → slides, HTML page, assets
 - `src/runtime/` — player script and CSS inlined into `slides.html`
 - `src/pdf.js`, `src/browser.js` — PDF export via headless Chrome
 - `src/notes.js`, `src/tts.js`, `src/voices.js`, `src/avatar.js`, `src/video.js` — voice-over, avatar and video pipeline
-- `src/dev.js` — live-reload preview server
 - `SKILL.md` — instructions for AI agents using this CLI
 
 ## Cheatsheet
@@ -226,3 +242,7 @@ so extra space is added below it. Tune it per slide with the
 Slides with `lead`, `divider` or `quote` are centered on the whole slide.
 
 Directive reference: https://marpit.marp.app/directives
+
+## License
+
+MIT — see [LICENSE](LICENSE).

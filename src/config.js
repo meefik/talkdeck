@@ -1,5 +1,5 @@
 import { load } from 'js-yaml';
-import { parseColor } from './avatar.js';
+import { parseColor } from './color.js';
 
 // service addresses depend on the machine, not on the deck: they come from the environment
 const MOVED = { 'tts-url': 'DECK_TTS_URL', 'avatar-url': 'DECK_AVATAR_URL' };

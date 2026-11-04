@@ -1,0 +1,38 @@
+# The deck backends on an AMD GPU (ROCm). The images carry the hsa_fix
+# (the ROCR 1.18 runtime + shim) baked in, so the container only needs the
+# GPU devices and a relaxed seccomp profile (the KFD ioctl is not in the
+# default seccomp filter).
+#
+# Run:
+#   docker compose -f docker-compose.rocm.yml up -d
+#
+# The models are seeded the same way as the CUDA compose file (see the README).
+
+services:
+  tts:
+    image: mirafleet/deck-tts:rocm
+    ports: ["8008:8008"]
+    volumes:
+      - ./models/qwen:/models:ro
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    security_opt:
+      - seccomp=unconfined
+    ipc: host
+    environment:
+      - ROCR_VISIBLE_DEVICES=0
+
+  avatar:
+    image: mirafleet/deck-avatar:rocm
+    ports: ["8020:8020"]
+    volumes:
+      - ./models/ditto:/opt/ditto/checkpoints:ro
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    security_opt:
+      - seccomp=unconfined
+    ipc: host
+    environment:
+      - ROCR_VISIBLE_DEVICES=0

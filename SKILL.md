@@ -1,44 +1,44 @@
 ---
-name: deck
-description: Build slide decks from Markdown with the `deck` CLI (Marp Core + a small Node renderer). Use when asked to create, edit, preview or export a presentation, slides, or a narrated video of slides to HTML, PDF or MP4 with voice-over and an avatar, or to add speaker notes, voices or themes to a deck.
+name: talkdeck
+description: Build slide decks from Markdown with the `talkdeck` CLI from talkdeck (Marp Core + a small Node renderer). Use when asked to create, edit, preview or export a presentation, slides, or a narrated video of slides to HTML, PDF or MP4 with voice-over and an avatar, or to add speaker notes, voices or themes to a deck.
 ---
 
-# Deck generator
+# Talkdeck generator
 
 `slides.md` (Markdown, Marp syntax + extra containers) → `slides.html` (player with presenter mode), optionally `slides.pdf` and `slides.mp4` (voice-over from the speaker notes, optional talking-head avatar).
 
-Use the `deck` CLI (`deck <command>`); do not invent other commands. Run `deck <command> --help` for exact options. Commands: `init`, `make`, `voice`.
+Use the `talkdeck` CLI (`talkdeck <command>`); do not invent other commands. Run `talkdeck <command> --help` for exact options. Commands: `init`, `make`, `voice`.
 
-Setup: the package is not on npm, it is installed from GitHub (Node ≥ 20). Check `deck --help` (or `npx deck --help` in a project that has it as a dependency) first; if it is missing, install it:
+Setup: the package is not on npm, it is installed from GitHub (Node ≥ 20). Check `talkdeck --help` (or `npx talkdeck --help` in a project that has it as a dependency) first; if it is missing, install it:
 
 ```bash
-npm install -g github:meefik/deck      # global `deck` command
-npm install -D github:meefik/deck      # or per project; then run it as `npx deck`
-npx github:meefik/deck make [dir]      # or one-off, nothing installed
+npm install -g github:meefik/talkdeck      # global `talkdeck` command
+npm install -D github:meefik/talkdeck      # or per project; then run it as `npx talkdeck`
+npx github:meefik/talkdeck make [dir]      # or one-off, nothing installed
 ```
 
-Inside a clone of the repo, run `npm install` once; `npm run deck --` is the same as `deck` there (e.g. `npm run deck -- make --pdf`).
+Inside a clone of the repo, run `npm install` once; `npm run talkdeck --` is the same as `talkdeck` there (e.g. `npm run talkdeck -- make --pdf`).
 
 ## Workflow
 
-1. **Pick the deck folder.** A folder with `slides.md` and optional `assets/`, `themes/*.css`, `avatars/`, `voices/`. Create a new one with `deck init my-talk` (copies the template's `slides.md` and `assets/` into `my-talk/`; refuses to overwrite an existing `slides.md`). With no `[dir]`, the CLI uses the current folder if it has a `slides.md`, otherwise the bundled `template/`. `template/` themes, avatars and voices are always available; the deck folder adds to or overrides them.
-2. **Write `slides.md`.** Start from the copy `deck init` made — it demonstrates every layout; copy the slide you need rather than writing HTML.
+1. **Pick the deck folder.** A folder with `slides.md` and optional `assets/`, `themes/*.css`, `avatars/`, `voices/`. Create a new one with `talkdeck init my-talk` (copies the template's `slides.md` and `assets/` into `my-talk/`; refuses to overwrite an existing `slides.md`). With no `[dir]`, the CLI uses the current folder if it has a `slides.md`, otherwise the bundled `template/`. `template/` themes, avatars and voices are always available; the deck folder adds to or overrides them.
+2. **Write `slides.md`.** Start from the copy `talkdeck init` made — it demonstrates every layout; copy the slide you need rather than writing HTML.
 3. **Check the result.** Build and look at it (see below). Do not claim a layout works without building.
 4. **Export** only what was asked.
 
 ## Commands
 
 ```bash
-deck init [dir]                       # new deck: slides.md + assets/ copied from the template
-deck make [dir]                       # ./output/slides.html (always written)
-deck make [dir] --pdf                 # + slides.pdf (one page per slide, reveals shown)
-deck make [dir] --video               # + slides.mp4 (1920x1080, voice-over, avatar)
-deck make [dir] --video --slides 1-2  # only these slides (1,3,5-7 also fine) → slides-1-2.mp4
-deck make [dir] -o out                # output directory (default ./output)
-deck voice <name> [dir] --describe "warm, calm female narrator" [--text ...] [--tts-seed N] [--force]
+talkdeck init [dir]                       # new deck: slides.md + assets/ copied from the template
+talkdeck make [dir]                       # ./output/slides.html (always written)
+talkdeck make [dir] --pdf                 # + slides.pdf (one page per slide, reveals shown)
+talkdeck make [dir] --video               # + slides.mp4 (1920x1080, voice-over, avatar)
+talkdeck make [dir] --video --slides 1-2  # only these slides (1,3,5-7 also fine) → slides-1-2.mp4
+talkdeck make [dir] -o out                # output directory (default ./output)
+talkdeck voice <name> [dir] --describe "warm, calm female narrator" [--text ...] [--tts-seed N] [--force]
 ```
 
-- With `npm run deck`, the command and its options go **after `--`** (`npm run deck -- make --pdf`); with `deck` / `npx deck` there is no `--`.
+- With `npm run talkdeck`, the command and its options go **after `--`** (`npm run talkdeck -- make --pdf`); with `talkdeck` / `npx talkdeck` there is no `--`.
 - `--slides` requires `--video`.
 - `--pdf` needs Chrome/Chromium/Edge (set `CHROMIUM_PATH` if not on `PATH`); `--video` also needs `ffmpeg`/`ffprobe`.
 - Output (`output/` is git-ignored): `slides.html`, `assets/`, `slides.pdf`, `slides.mp4` (`slides-<list>.mp4` with `--slides`; commas become `_`), `slides/slideNN.png`, `voiceovers/slideNN.wav`, `avatars/slideNN.mp4`, `segments/slideNN.mkv`, `.cache.json` (never edit it; it makes rebuilds regenerate only changed slides).
@@ -111,7 +111,7 @@ avatar-border-color: black      # white, black, "#rgb", "#rrggbb" (quote hex: an
 ```
 
 - Bundled voices: `maria`, `leon`; bundled avatars: `maria`, `leon`. An unknown name fails the build and lists the available ones. Lookup is `[dir]/voices|avatars/` first, then `template/`.
-- A named sample is cloned, so the voice stays identical across slides. A description is designed fresh per slide (quick to try, drifts). Create a sample once with `deck voice` (needs an existing `[dir]` unless the current folder has `slides.md`; `template` means the bundled template; `--tts-seed` reproduces a voice; `--force` replaces one and changes every deck using it).
+- A named sample is cloned, so the voice stays identical across slides. A description is designed fresh per slide (quick to try, drifts). Create a sample once with `talkdeck voice` (needs an existing `[dir]` unless the current folder has `slides.md`; `template` means the bundled template; `--tts-seed` reproduces a voice; `--force` replaces one and changes every deck using it).
 - Avatars only appear in the video.
 
 ## Services (environment, never the deck)
@@ -120,16 +120,16 @@ avatar-border-color: black      # white, black, "#rgb", "#rrggbb" (quote hex: an
 
 | Variable | Default |
 | --- | --- |
-| `DECK_TTS_URL` | `http://127.0.0.1:8010/v1/audio` (OpenAI-compatible, requests go to `<url>/speech`) |
-| `DECK_AVATAR_URL` | `http://127.0.0.1:8010/v1/video` |
-| `DECK_TTS_KEY`, `DECK_AVATAR_KEY` | API keys if the services need them |
+| `TALKDECK_TTS_URL` | `http://127.0.0.1:8081/v1/audio` (OpenAI-compatible, requests go to `<url>/speech`) |
+| `TALKDECK_AVATAR_URL` | `http://127.0.0.1:8082/v1/video` |
+| `TALKDECK_TTS_KEY`, `TALKDECK_AVATAR_KEY` | API keys if the services need them |
 
 Never put keys in the repo or in `slides.md`.
 
 ## Tips for agents
 
-- HTML-only requests: `deck make [dir]` is enough and needs no external service. Don't run `--video` unless asked; it calls local TTS/avatar services and avatar generation is slow (~5× realtime, one job at a time, 1–2 min cold start). While iterating on narration, use `--video --slides N-M`, and run long builds in the background.
-- If `--video` fails with a connection error, the TTS/avatar service is down or `DECK_*_URL` is wrong — report that rather than retrying or removing the voice/avatar.
+- HTML-only requests: `talkdeck make [dir]` is enough and needs no external service. Don't run `--video` unless asked; it calls local TTS/avatar services and avatar generation is slow (~5× realtime, one job at a time, 1–2 min cold start). While iterating on narration, use `--video --slides N-M`, and run long builds in the background.
+- If `--video` fails with a connection error, the TTS/avatar service is down or `TALKDECK_*_URL` is wrong — report that rather than retrying or removing the voice/avatar.
 - To see the result, build and open `output/slides.html` (the browser tool can open it); for the PDF, check page count equals slide count.
 - Don't edit `output/`, `.cache.json`, or the installed package (`src/`, `template/`) just to make a deck look different — use a deck-local `themes/*.css` (it adds to or overrides the built-in theme) or `<style scoped>`.
 - Marp directive reference: https://marpit.marp.app/directives

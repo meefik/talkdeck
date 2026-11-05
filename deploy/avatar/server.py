@@ -1,24 +1,35 @@
 #!/usr/bin/env python3
-"""Ditto talking-head task server (the deck's DECK_AVATAR_URL backend).
+"""Ditto talking-head task server (the deck's TALKDECK_AVATAR_URL backend).
 
 Loads the official Ditto StreamSDK and serves the async task API the deck's
 avatar.js speaks:
 
-    POST /generate   multipart (source, audio, format, size) -> {task_id}
-    POST /query      {"task_id_list": [..]} -> [{status, result}]
-    GET  /v1/video/<task_id>                -> the generated video
-    GET  /health                            -> 200 when the models are loaded
+    POST /v1/video/generate   multipart (source, audio, format, size) -> {task_id}
+    POST /v1/video/query      {"task_id_list": [..]} -> [{status, result}]
+    GET  /v1/video/<task_id>                         -> the generated video
+    GET  /v1/models                                  -> the served model ids
+    GET  /health                                     -> 200 when the models are loaded
 
-`status` is 0 (running), 1 (done, `result` = {"file": "/v1/video/<task_id>"}),
-or 2 (failed). One job at a time (Ditto renders one head at a time). The models
-load from a local path (seed the volume with `huggingface-cli download`).
+The same paths and task contract as the fleet door's talkinghead: `status` is 0
+(running, `result` null), 1 (done, `result` = a JSON string {"file":
+"/v1/video/<task_id>"}) or 2 (failed, `result` = a JSON string {"error": ...});
+an unknown task id is status 2. One job at a time (Ditto renders one head at a
+time). A settled task is written to <workdir>/<task_id>/status.json, so query and
+the download survive a restart, and the task dir is deleted after
+AVATAR_RETENTION_S (24 h). If API_KEY is set, every route but /health and
+/v1/models needs `Authorization: Bearer <API_KEY>`. The models load from a local
+path. On the first start a missing checkpoint set (the PyTorch subset) is
+downloaded from Hugging Face into the /opt/ditto/checkpoints volume, so later
+starts are offline; set AUTO_DOWNLOAD=0 to skip that and seed the volume
+yourself. HF_TOKEN is used if set.
 """
 
-import io
+import hmac
 import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -39,7 +50,12 @@ from stream_pipeline_offline import StreamSDK  # noqa: E402
 DEFAULT_SIZE = int(os.environ.get("AVATAR_DEFAULT_SIZE", "512"))
 DATA_ROOT = os.environ.get("DITTO_DATA_ROOT", "/opt/ditto/checkpoints/ditto_pytorch")
 CFG_PKL = os.environ.get("DITTO_CFG", "/opt/ditto/checkpoints/ditto_cfg/v0.4_hubert_cfg_pytorch.pkl")
-PORT = int(os.environ.get("PORT", "8020"))
+PORT = int(os.environ.get("PORT", "8082"))
+API_KEY = os.environ.get("API_KEY", "").strip()
+AUTO_DOWNLOAD = os.environ.get("AUTO_DOWNLOAD", "1") != "0"
+DITTO_REPO = os.environ.get("DITTO_REPO", "digital-avatar/ditto-talkinghead")
+CHECKPOINTS = os.environ.get("DITTO_CHECKPOINTS", "/opt/ditto/checkpoints")
+RETENTION_S = int(os.environ.get("AVATAR_RETENTION_S", "86400"))
 
 # Output containers that take the engine's h264 + aac mux.
 _FORMATS = frozenset({"mp4", "mov", "mkv"})
@@ -49,9 +65,29 @@ _TASK_ID = re.compile(r"[0-9a-f]{8,64}")
 _sdk = None
 _loaded = threading.Event()
 _job_lock = threading.Lock()
-_tasks = {}  # task_id -> {"status": int, "result": dict}
+_tasks = {}  # task_id -> {"status": int, "result": str | None, "fmt": str}
 _tasks_lock = threading.Lock()
-_workdir = os.environ.get("AVATAR_WORKDIR", "/tmp/avatar")
+_workdir = os.environ.get("AVATAR_WORKDIR", "/srv/avatar")
+
+
+_stage = "loading"
+
+
+def _ensure_models():
+    """Download the PyTorch checkpoints + configs once; the .complete marker makes later starts offline."""
+    global _stage
+    marker = os.path.join(CHECKPOINTS, ".complete")
+    if not AUTO_DOWNLOAD or os.path.exists(marker):
+        return
+    from huggingface_hub import snapshot_download
+
+    _stage = f"downloading {DITTO_REPO}"
+    print(f"[avatar] downloading {DITTO_REPO} -> {CHECKPOINTS} (first start only) …", flush=True)
+    snapshot_download(
+        repo_id=DITTO_REPO, local_dir=CHECKPOINTS, allow_patterns=["ditto_pytorch/*", "ditto_cfg/*"]
+    )
+    open(marker, "w").close()
+    _stage = "loading"
 
 
 def _load():
@@ -59,10 +95,11 @@ def _load():
     t0 = time.time()
     print(f"[avatar] loading Ditto (data_root={DATA_ROOT}) …", flush=True)
     try:
+        _ensure_models()
         _sdk = StreamSDK(CFG_PKL, DATA_ROOT)
     except BaseException:
         traceback.print_exc()
-        print("[avatar] model load failed; exiting (a restart re-attempts the load)", flush=True)
+        print("[avatar] model load failed (a download error: check the network / HF_TOKEN); exiting, a restart re-attempts it", flush=True)
         os._exit(1)
     _loaded.set()
     print(f"[avatar] models loaded in {time.time() - t0:.0f} s", flush=True)
@@ -116,26 +153,75 @@ def _run_job(source_path, audio_path, output_path, size=DEFAULT_SIZE):
     return {"seconds": round(len(audio) / sr, 3), "frames": num_f, "wall_s": round(time.time() - t0, 1)}
 
 
-def _worker(task_id, source, audio, out, size):
-    # do_POST seeds _tasks[task_id] with {"status": 0, "result": {"fmt": ...}};
-    # preserve that result (the download reads the format from it) and only
-    # update the status here.
-    def _set(status, result):
-        with _tasks_lock:
-            prev = _tasks.get(task_id) or {}
-            merged = dict(prev.get("result") or {})
-            merged.update(result)
-            _tasks[task_id] = {"status": status, "result": merged}
+def _task_dir(task_id):
+    return os.path.join(_workdir, task_id)
 
-    _set(0, {})
+
+def _set_task(task_id, status, result):
+    """Record a task's state; a settled one is also written to the volume."""
+    with _tasks_lock:
+        t = {"status": status, "result": result, "fmt": _tasks.get(task_id, {}).get("fmt", "mp4")}
+        _tasks[task_id] = t
+    if status == 0:
+        return
+    try:
+        tmp = os.path.join(_task_dir(task_id), "status.json.tmp")
+        with open(tmp, "w") as f:
+            json.dump(t, f)
+        os.replace(tmp, os.path.join(_task_dir(task_id), "status.json"))
+    except OSError as e:
+        print(f"[avatar] could not persist task {task_id}: {e!r}", flush=True)
+
+
+def _task_state(task_id):
+    with _tasks_lock:
+        t = _tasks.get(task_id)
+    if t is not None:
+        return t
+    tdir = _task_dir(task_id)
+    if os.path.isdir(tdir):
+        try:
+            with open(os.path.join(tdir, "status.json")) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            # A dir with no settled status and no memory of it: the server restarted mid-job.
+            return {"status": 2, "result": json.dumps({"error": "task interrupted (the server restarted mid-job)"}), "fmt": "mp4"}
+    return {"status": 2, "result": json.dumps({"error": "unknown task_id"}), "fmt": "mp4"}
+
+
+def _worker(task_id, source, audio, out, size):
     try:
         with _job_lock:
             _run_job(source, audio, out, size=size)
-        _set(1, {"file": f"/v1/video/{task_id}"})
+        _set_task(task_id, 1, json.dumps({"file": f"/v1/video/{task_id}"}))
         print(f"[avatar] task {task_id} done", flush=True)
     except Exception as e:  # noqa: BLE001 — a crash must not kill the server
-        _set(2, {"error": repr(e)})
+        _set_task(task_id, 2, json.dumps({"error": repr(e)}))
         print(f"[avatar] task {task_id} failed: {e!r}", flush=True)
+
+
+def _sweep():
+    """Delete task dirs older than the retention (a running job's dir is touched by its own writes)."""
+    while True:
+        time.sleep(600)
+        cutoff = time.time() - RETENTION_S
+        try:
+            names = os.listdir(_workdir)
+        except OSError:
+            continue
+        for name in names:
+            if not _TASK_ID.fullmatch(name):
+                continue
+            with _tasks_lock:
+                running = _tasks.get(name, {}).get("status") == 0
+            tdir = _task_dir(name)
+            try:
+                if not running and os.stat(tdir).st_mtime < cutoff:
+                    shutil.rmtree(tdir, ignore_errors=True)
+                    with _tasks_lock:
+                        _tasks.pop(name, None)
+            except OSError:
+                pass
 
 
 def _parse_multipart(body, content_type):
@@ -183,51 +269,63 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _auth_ok(self):
+        if not API_KEY:
+            return True
+        return hmac.compare_digest(
+            self.headers.get("Authorization", "").encode(), f"Bearer {API_KEY}".encode()
+        )
+
     def do_GET(self):
-        p = self.path.rstrip("/")
+        p = self.path.split("?", 1)[0].rstrip("/")
         if p in ("", "/health"):
             if _loaded.is_set():
                 self._json(200, {"status": "ok", "engine": "ready"})
             else:
-                self._json(503, {"status": "loading"})
+                self._json(503, {"status": _stage})
+            return
+        if p == "/v1/models":
+            self._json(200, {"object": "list", "data": [{"id": "ditto", "object": "model", "served_by": "avatar"}]})
+            return
+        if not self._auth_ok():
+            self._json(401, {"error": "unauthorized"})
             return
         m = re.fullmatch(r"/v1/video/([0-9a-f]{8,64})", p)
         if m:
             task_id = m.group(1)
-            with _tasks_lock:
-                t = _tasks.get(task_id)
-            if not t or t["status"] != 1:
-                self._json(404, {"error": "file not found (the task is not done)"})
-                return
-            fpath = os.path.join(_workdir, task_id, "out." + (t["result"].get("fmt", "mp4")))
-            if not os.path.isfile(fpath):
+            t = _task_state(task_id)
+            # Only a finished task's output is served, never a partial one.
+            fpath = os.path.join(_task_dir(task_id), "out." + t.get("fmt", "mp4"))
+            if t["status"] != 1 or not os.path.isfile(fpath):
                 self._json(404, {"error": "file not found"})
                 return
             with open(fpath, "rb") as f:
                 self._bytes(200, f.read(), _MIME.get(fpath.rsplit(".", 1)[-1], "application/octet-stream"))
             return
-        self._json(404, {"error": "not found"})
+        self._json(404, {"error": f"no such endpoint: GET {p}"})
 
     def do_POST(self):
+        if not self._auth_ok():
+            self._json(401, {"error": "unauthorized"})
+            return
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length) if length else b""
-        p = self.path.lstrip("/")
-        if not _loaded.wait(timeout=600):
+        p = self.path.split("?", 1)[0].rstrip("/")
+        if not _loaded.wait(timeout=1800):
             self._json(503, {"error": "models are still loading"})
             return
         try:
-            if p == "query":
+            if p == "/v1/video/query":
                 body = json.loads(raw or b"{}")
-                ids = body.get("task_id_list", [])
-                if not isinstance(ids, list):
-                    raise ValueError("task_id_list must be a list")
+                ids = body.get("task_id_list", []) if isinstance(body, dict) else None
+                if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+                    raise ValueError("task_id_list must be a list of task ids")
                 out = []
-                with _tasks_lock:
-                    for i in ids:
-                        t = _tasks.get(i) or {"status": 2, "result": {"error": "unknown task_id"}}
-                        out.append({"status": t["status"], "result": json.dumps(t["result"]) if t["result"] is not None else None})
+                for i in ids:
+                    t = _task_state(i) if _TASK_ID.fullmatch(i) else {"status": 2, "result": json.dumps({"error": "unknown task_id"})}
+                    out.append({"status": t["status"], "result": t["result"]})
                 self._json(200, out)
-            elif p == "generate":
+            elif p == "/v1/video/generate":
                 parts = _parse_multipart(raw, self.headers.get("Content-Type", ""))
                 if "source" not in parts or "audio" not in parts:
                     raise ValueError("multipart needs source + audio")
@@ -238,15 +336,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not (2 <= size <= 1920):
                     raise ValueError("size must be 2..1920")
                 task_id = uuid.uuid4().hex
-                tdir = os.path.join(_workdir, task_id)
+                tdir = _task_dir(task_id)
                 os.makedirs(tdir, exist_ok=True)
                 with open(os.path.join(tdir, "source"), "wb") as f:
                     f.write(parts["source"][1])
                 with open(os.path.join(tdir, "audio"), "wb") as f:
                     f.write(parts["audio"][1])
-                # Remember the format so the download knows the extension.
                 with _tasks_lock:
-                    _tasks[task_id] = {"status": 0, "result": {"fmt": fmt}}
+                    _tasks[task_id] = {"status": 0, "result": None, "fmt": fmt}
                 threading.Thread(
                     target=_worker,
                     args=(task_id, os.path.join(tdir, "source"), os.path.join(tdir, "audio"), os.path.join(tdir, f"out.{fmt}"), size),
@@ -254,9 +351,12 @@ class Handler(BaseHTTPRequestHandler):
                 ).start()
                 self._json(200, {"task_id": task_id, "status": "queued"})
             else:
-                self._json(404, {"error": "not found"})
+                self._json(404, {"error": f"no such endpoint: POST {p}"})
         except ValueError as e:
             self._json(400, {"error": str(e)})
+        except Exception as e:  # noqa: BLE001 — answer instead of dropping the connection
+            traceback.print_exc()
+            self._json(500, {"error": f"internal error: {e!r}"})
 
     def log_message(self, fmt, *args):
         print(f"[avatar] {self.command} {self.path}", flush=True)
@@ -267,6 +367,7 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"[avatar] listening :{PORT}; loading models in the background", flush=True)
     threading.Thread(target=_load, daemon=True).start()
+    threading.Thread(target=_sweep, daemon=True).start()
     srv.serve_forever()
 
 

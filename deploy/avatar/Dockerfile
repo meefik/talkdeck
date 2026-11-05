@@ -1,35 +1,23 @@
-# deck-avatar — Ditto (official model) behind the deck's async task API.
+# talkdeck/avatar — Ditto (official model) behind the deck's async task API.
 #
-# Two variants, built from this one file by choosing BASE:
+# Two variants, built from this one file by choosing the BASE image:
 #
-#   VARIANT=cuda  BASE=pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+#   cuda  BASE=docker.io/pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 #                 (the official NVIDIA PyTorch base, torch 2.5.1 — matches
 #                  Ditto's environment.yaml; the common case for a non-fleet user)
-#   VARIANT=rocm  BASE=rocm/pytorch:rocm7.14_ubuntu24.04_py3.13_pytorch_release_2.12.0
-#                 (the AMD ROCm PyTorch base + the hsa_fix preload)
+#   rocm  BASE=docker.io/rocm/pytorch:rocm10.1.0_ubuntu24.04_py3.12_pytorch_release_2.12.0
+#                 (the AMD ROCm PyTorch base; 10.1.0 carries the upstream
+#                  AsyncEventsLoop fix, so no hsa_fix preload is needed)
 #
-# The entrypoint sets the hsa_fix LD_PRELOAD only when DECK_VARIANT=rocm, so the
-# CUDA variant never loads the ROCm-only libraries.
-#
-# The model weights are NOT baked in. Seed the mounted /opt/ditto/checkpoints
-# volume with `huggingface-cli download` (see the README); the server loads them
-# from DITTO_DATA_ROOT / DITTO_CFG.
+# The model weights are NOT baked in: the server downloads them into the mounted
+# /opt/ditto/checkpoints volume on the first start (see the README) and loads
+# them from DITTO_DATA_ROOT / DITTO_CFG.
 
-# The base image, chosen per variant (see build.sh).
-ARG BASE=pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+# The base image, chosen per variant (set in the compose files).
+ARG BASE=docker.io/pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 FROM ${BASE}
 
-# Bake the variant so the entrypoint can gate the hsa_fix preload on it.
-ARG VARIANT=cuda
-ENV DECK_VARIANT=${VARIANT}
 ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# The hsa_fix (the ROCR 1.18 runtime + the 15-stub shim), baked in for the ROCm
-# variant; never loaded on CUDA (the entrypoint gates LD_PRELOAD). The builder
-# image is the fleet's projects/fleet/build/hsa_fix (bash build.sh); the tag
-# prefix varies by tool (podman stores it as localhost/mirafleet/...).
-ARG HSABASE=mirafleet/hsa-fix-build:latest
-COPY --from=${HSABASE} /out/ /opt/hsa_fix/
 
 # System deps: git (the pinned clone), ffmpeg (audio decode + the video mux),
 # the GL libs mediapipe needs (the base lacks them), gcc/g++ (the blend build).
@@ -37,6 +25,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
          git ffmpeg gcc g++ libegl1 libgl1 libgles2 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
+
+# Remember which torch the base image ships (ROCm or CUDA build): a pip dependency
+# must not replace it with a PyPI wheel of the other flavour. (python3: the ROCm
+# 10.1.0 base has no `python` symlink, only `python3`.)
+RUN python3 -c "import torch; print(torch.__version__, torch.version.hip, torch.version.cuda)" > /tmp/torch.base
 
 # Ditto's non-torch requirements (the PyTorch stream pipeline at the pinned
 # commit needs mediapipe + onnxruntime, which the official environment.yaml —
@@ -57,8 +50,11 @@ RUN pip install \
          tqdm \
          colored \
          soundfile \
-    && python -c "import onnxruntime, mediapipe, librosa, imageio, cv2, skimage, scipy, numba, filetype, tqdm, colored, soundfile, einops, torch; print('deps ok; torch', torch.__version__)" \
+         huggingface_hub \
+    && python3 -c "import onnxruntime, mediapipe, librosa, imageio, cv2, skimage, scipy, numba, filetype, tqdm, colored, soundfile, einops, torch; print('deps ok; torch', torch.__version__)" \
     && ffmpeg -version | head -1
+RUN python3 -c "import torch; print(torch.__version__, torch.version.hip, torch.version.cuda)" | diff - /tmp/torch.base \
+    || { echo 'pip replaced the base image torch (ROCm/CUDA flavour changed): pin or exclude the dependency' >&2; exit 1; }
 
 # Ditto pinned at the verified commit (the PyTorch stream pipeline); bump
 # deliberately, then re-verify.
@@ -67,18 +63,15 @@ RUN git clone --filter=blob:none https://github.com/antgroup/ditto-talkinghead /
     && git -C /opt/ditto checkout ${DITTO_COMMIT}
 
 # Pre-compile Ditto's blend.pyx (pyximport is gone from Cython 3) — the fleet's recipe.
-COPY avatar-blend.sh /opt/ditto-build/blend.sh
+COPY blend.sh /opt/ditto-build/blend.sh
 RUN sh /opt/ditto-build/blend.sh
 
-COPY avatar-server.py /opt/avatar-server.py
-COPY entrypoint.sh /entrypoint.sh
-# Run via sh (the FUSE mount stores files without an exec bit; `sh script` needs none).
+COPY server.py /opt/avatar-server.py
 
-ENV PORT=8020 \
+ENV PORT=8082 \
     DITTO_DIR=/opt/ditto \
     DITTO_DATA_ROOT=/opt/ditto/checkpoints/ditto_pytorch \
     DITTO_CFG=/opt/ditto/checkpoints/ditto_cfg/v0.4_hubert_cfg_pytorch.pkl
 
-EXPOSE 8020
-ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
+EXPOSE 8082
 CMD ["python3", "/opt/avatar-server.py"]

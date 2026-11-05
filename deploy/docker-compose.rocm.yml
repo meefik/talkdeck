@@ -1,38 +1,68 @@
-# The deck backends on an AMD GPU (ROCm). The images carry the hsa_fix
-# (the ROCR 1.18 runtime + shim) baked in, so the container only needs the
-# GPU devices and a relaxed seccomp profile (the KFD ioctl is not in the
-# default seccomp filter).
+# The deck backends on an AMD GPU (ROCm): Qwen3-TTS (voice-overs) + Ditto (talking heads).
+# The containers need the GPU devices and a relaxed seccomp profile (the KFD ioctl is not in the default filter).
 #
-# Run:
-#   docker compose -f docker-compose.rocm.yml up -d
+#   docker compose -f docker-compose.rocm.yml up -d        # both
+#   docker compose -f docker-compose.rocm.yml up -d tts    # or one
 #
-# The models are seeded the same way as the CUDA compose file (see the README).
+# Build the images with `docker compose -f docker-compose.rocm.yml build`.
+# The first start downloads the models (~10 GB) into the volumes, then:
+#   export TALKDECK_TTS_URL=http://127.0.0.1:8081/v1/audio
+#   export TALKDECK_AVATAR_URL=http://127.0.0.1:8082/v1/video
+#
+# Optional: `API_KEY=secret docker compose ... up -d` makes both services require
+# `Authorization: Bearer secret` (then export TALKDECK_TTS_KEY / TALKDECK_AVATAR_KEY).
+
+x-rocm: &rocm
+  devices:
+    - /dev/kfd
+    - /dev/dri
+  security_opt:
+    - seccomp=unconfined
+  ipc: host
+  environment:
+    - ROCR_VISIBLE_DEVICES=0
+    - API_KEY=${API_KEY:-}
+    - HF_TOKEN=${HF_TOKEN:-}
 
 services:
   tts:
-    image: mirafleet/deck-tts:rocm
-    ports: ["8008:8008"]
+    <<: *rocm
+    image: talkdeck/tts:rocm
+    build:
+      context: ./tts
+      args:
+        BASE: docker.io/rocm/pytorch:rocm10.1.0_ubuntu24.04_py3.12_pytorch_release_2.12.0
+    ports: ["8081:8081"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
     volumes:
-      - ./models/qwen:/models:ro
-    devices:
-      - /dev/kfd
-      - /dev/dri
-    security_opt:
-      - seccomp=unconfined
-    ipc: host
-    environment:
-      - ROCR_VISIBLE_DEVICES=0
+      - tts_models:/models
 
   avatar:
-    image: mirafleet/deck-avatar:rocm
-    ports: ["8020:8020"]
+    <<: *rocm
+    image: talkdeck/avatar:rocm
+    build:
+      context: ./avatar
+      args:
+        BASE: docker.io/rocm/pytorch:rocm10.1.0_ubuntu24.04_py3.12_pytorch_release_2.12.0
+    ports: ["8082:8082"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
     volumes:
-      - ./models/ditto:/opt/ditto/checkpoints:ro
-    devices:
-      - /dev/kfd
-      - /dev/dri
-    security_opt:
-      - seccomp=unconfined
-    ipc: host
-    environment:
-      - ROCR_VISIBLE_DEVICES=0
+      - avatar_models:/opt/ditto/checkpoints
+      - avatar_tasks:/srv/avatar
+
+volumes:
+  tts_models:
+  avatar_models:
+  avatar_tasks:

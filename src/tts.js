@@ -7,7 +7,7 @@ const isQwen = (model) => model.startsWith('qwen-tts');
 
 /**
  * Text-to-speech via an OpenAI-compatible `/audio/speech` endpoint; `url` is the audio base,
- * e.g. http://127.0.0.1:8010/v1/audio. `synth` writes `file` (wav), unless `cache` says it was
+ * e.g. http://127.0.0.1:8081/v1/audio. `synth` writes `file` (wav), unless `cache` says it was
  * already generated from the same inputs.
  *
  * - qwentts (model `qwen-tts*`), `voice` is one of:
@@ -39,7 +39,7 @@ export function createTts({ url, key, model, voice: defaultVoice, speed, cache, 
     const sample = await findVoice(voice, voiceDirs);
     if (sample) {
       const id = hash(sample.wav, sample.text ?? '');
-      return { kind: 'clone', ...sample, id, regName: `deck_${voice.replace(/\W/g, '_')}_${id.slice(0, 8)}` };
+      return { kind: 'clone', ...sample, id, regName: `talkdeck_${voice.replace(/\W/g, '_')}_${id.slice(0, 8)}` };
     }
     if (/^[\w.-]+$/.test(voice)) {
       const known = await listVoices(voiceDirs);

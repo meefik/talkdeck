@@ -2,7 +2,7 @@ import { load } from 'js-yaml';
 import { parseColor } from './color.js';
 
 // service addresses depend on the machine, not on the deck: they come from the environment
-const MOVED = { 'tts-url': 'DECK_TTS_URL', 'avatar-url': 'DECK_AVATAR_URL' };
+const MOVED = { 'tts-url': 'TALKDECK_TTS_URL', 'avatar-url': 'TALKDECK_AVATAR_URL' };
 
 export const POSITIONS = ['top-right', 'top-left', 'bottom-right', 'bottom-left'];
 
@@ -59,8 +59,8 @@ const color = (v) => {
  *   avatar, avatar-size, avatar-diameter,              the talking head and how the circle looks
  *   avatar-position, avatar-border, avatar-border-color
  *
- * The service addresses and the TTS key are not deck settings: DECK_TTS_URL, DECK_AVATAR_URL and
- * DECK_TTS_KEY in the environment.
+ * The service addresses and the TTS key are not deck settings: TALKDECK_TTS_URL, TALKDECK_AVATAR_URL and
+ * TALKDECK_TTS_KEY in the environment.
  */
 export function deckConfig(front) {
   for (const [key, name] of Object.entries(MOVED)) {
@@ -68,7 +68,7 @@ export function deckConfig(front) {
   }
   // `avatar-border-color: #ff0000` is a YAML comment, i.e. null: don't silently fall back to the default
   if (front['avatar-border-color'] === null) throw new Error('slides.md: front matter "avatar-border-color": empty value; quote a hex color ("#ff0000"), since an unquoted # starts a YAML comment');
-  if (front['tts-seed'] !== undefined) throw new Error('slides.md: front matter "tts-seed" is not a deck setting; it is an option of "deck voice" (--tts-seed)');
+  if (front['tts-seed'] !== undefined) throw new Error('slides.md: front matter "tts-seed" is not a deck setting; it is an option of "talkdeck voice" (--tts-seed)');
   return {
     silentDuration: pick(front, 'silent-duration', 3, number(0.5, 60)),
     tts: {

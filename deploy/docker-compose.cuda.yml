@@ -1,0 +1,75 @@
+# The deck backends on an NVIDIA GPU: Qwen3-TTS (voice-overs) + Ditto (talking heads).
+#
+#   docker compose -f docker-compose.cuda.yml up -d        # both
+#   docker compose -f docker-compose.cuda.yml up -d tts    # or one
+#
+# The GPU is passed through CDI (Container Device Interface), which podman and
+# docker >= 28.3 both understand. One-time host setup: install
+# nvidia-container-toolkit, then
+#   sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+# (rerun after a driver update). Docker < 28.3 / no CDI: see README.md.
+#
+# Works the same with `podman-compose` (or `podman compose`).
+#
+# Build the images with `docker compose -f docker-compose.cuda.yml build`.
+# The first start downloads the models (~10 GB) into the volumes, then:
+#   export TALKDECK_TTS_URL=http://127.0.0.1:8081/v1/audio
+#   export TALKDECK_AVATAR_URL=http://127.0.0.1:8082/v1/video
+#
+# Optional: `API_KEY=secret docker compose ... up -d` makes both services require
+# `Authorization: Bearer secret` (then export TALKDECK_TTS_KEY / TALKDECK_AVATAR_KEY).
+
+services:
+  tts:
+    image: talkdeck/tts:cuda
+    build:
+      context: ./tts
+      args:
+        BASE: docker.io/pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+    ports: ["8081:8081"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
+    environment:
+      - API_KEY=${API_KEY:-}
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - tts_models:/models
+    devices:
+      - nvidia.com/gpu=all
+    security_opt:
+      - label=disable
+
+  avatar:
+    image: talkdeck/avatar:cuda
+    build:
+      context: ./avatar
+      args:
+        BASE: docker.io/pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+    ports: ["8082:8082"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
+    environment:
+      - API_KEY=${API_KEY:-}
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - avatar_models:/opt/ditto/checkpoints
+      - avatar_tasks:/srv/avatar
+    devices:
+      - nvidia.com/gpu=all
+    security_opt:
+      - label=disable
+
+volumes:
+  tts_models:
+  avatar_models:
+  avatar_tasks:

@@ -1,14 +1,14 @@
 {
-  "name": "@meefik/deck",
+  "name": "talkdeck",
   "version": "0.1.0",
   "description": "Markdown slides to HTML, PDF and narrated video",
   "license": "MIT",
   "scripts": {
-    "deck": "node src/cli.js"
+    "talkdeck": "node src/cli.js"
   },
   "type": "module",
   "bin": {
-    "deck": "src/cli.js"
+    "talkdeck": "src/cli.js"
   },
   "engines": {
     "node": ">=20"

@@ -1,4 +1,4 @@
-# Deck
+# Talkdeck
 
 Markdown slides rendered by a small Node CLI (`src/`) to **HTML, PDF and a
 narrated MP4**. [Marp Core](https://marpit.marp.app/) is used as the Markdown →
@@ -10,21 +10,21 @@ slides engine (so Marp syntax, directives and themes work); everything else
 The package is not published to npm; install it from GitHub (Node ≥ 20):
 
 ```bash
-npm install -g github:meefik/deck             # the `deck` command, globally
-npm install -D github:meefik/deck             # or as a dependency of your project (then `npx deck`)
-npx github:meefik/deck make my-talk           # or run it once without installing
-npm install -g github:meefik/deck#v0.1.0      # pin a tag, branch or commit
+npm install -g github:meefik/talkdeck             # the `talkdeck` command, globally
+npm install -D github:meefik/talkdeck             # or as a dependency of your project (then `npx talkdeck`)
+npx github:meefik/talkdeck make my-talk           # or run it once without installing
+npm install -g github:meefik/talkdeck#v0.1.0      # pin a tag, branch or commit
 ```
 
-To hack on it, clone the repo and run `npm install` inside; `npm run deck --` is
-then the same as `deck` (e.g. `npm run deck -- make --pdf`).
+To hack on it, clone the repo and run `npm install` inside; `npm run talkdeck --` is
+then the same as `talkdeck` (e.g. `npm run talkdeck -- make --pdf`).
 
 ## Usage
 
 ```bash
-deck init my-talk                   # new deck: my-talk/slides.md (a copy of the template) + assets/
-deck make my-talk                   # ./output/slides.html
-deck make my-talk --pdf --video     # + slides.pdf and slides.mp4 (voice-over, avatars)
+talkdeck init my-talk                   # new deck: my-talk/slides.md (a copy of the template) + assets/
+talkdeck make my-talk                   # ./output/slides.html
+talkdeck make my-talk --pdf --video     # + slides.pdf and slides.mp4 (voice-over, avatars)
 ```
 
 Options: `--pdf`, `--video`, `--slides 1-2` (just those slides),
@@ -33,8 +33,8 @@ directory with `slides.md` and (optionally) `assets/`, `themes/*.css`,
 `avatars/` and `voices/`. If omitted it is the current folder when that has a
 `slides.md`, otherwise the bundled `template/`. The output directory defaults
 to `./output`. `slides.html` is always written; the PDF and the video are opt-in.
-If `deck` is installed as a project dependency rather than globally, prefix the
-commands with `npx` (`npx deck make --pdf`).
+If `talkdeck` is installed as a project dependency rather than globally, prefix the
+commands with `npx` (`npx talkdeck make --pdf`).
 
 Output directory:
 
@@ -75,12 +75,12 @@ visible content
 ## Voice-overs and video
 
 The same note comments are the script for the voice-over (no separate text
-files). `deck make --video` narrates each slide through an OpenAI-compatible
+files). `talkdeck make --video` narrates each slide through an OpenAI-compatible
 `/audio/speech` API (default: **qwentts**, model `qwen-tts`, on a local service) and can put a talking head on each slide:
 
 ```bash
-deck make --video
-deck make --video --slides 1-2     # just slides 1-2, for review
+talkdeck make --video
+talkdeck make --video --slides 1-2     # just slides 1-2, for review
 ```
 
 The CLI has `-o`, `--pdf`, `--video` and `--slides`. **Everything else about the voice and the avatar
@@ -113,10 +113,10 @@ addresses depend on the machine:
 
 | Variable | Default |
 | --- | --- |
-| `DECK_TTS_URL` | `http://127.0.0.1:8010/v1/audio` (requests go to `<url>/speech`) |
-| `DECK_AVATAR_URL` | `http://127.0.0.1:8010/v1/video` |
-| `DECK_TTS_KEY` | – (API key for the voice-over service, if it needs one) |
-| `DECK_AVATAR_KEY` | – (API key for the talking-head service, if it needs one) |
+| `TALKDECK_TTS_URL` | `http://127.0.0.1:8081/v1/audio` (requests go to `<url>/speech`) |
+| `TALKDECK_AVATAR_URL` | `http://127.0.0.1:8082/v1/video` |
+| `TALKDECK_TTS_KEY` | – (API key for the voice-over service, if it needs one) |
+| `TALKDECK_AVATAR_KEY` | – (API key for the talking-head service, if it needs one) |
 
 A `tts-url` or `avatar-url` key in the header is an error that points here.
 
@@ -127,8 +127,8 @@ template ships `maria` (female) and `leon` (male). Create your own from a
 description, once:
 
 ```bash
-deck voice maria template --describe "warm, calm female narrator" --force   # -> template/voices/maria.wav (replaces the bundled one)
-deck voice anna ./my-talk --describe "young, upbeat voice"          # -> ./my-talk/voices/anna.wav
+talkdeck voice maria template --describe "warm, calm female narrator" --force   # -> template/voices/maria.wav (replaces the bundled one)
+talkdeck voice anna ./my-talk --describe "young, upbeat voice"          # -> ./my-talk/voices/anna.wav
 ```
 
 Without `[dir]` it writes into the current folder, but only if that has a
@@ -136,7 +136,7 @@ Without `[dir]` it writes into the current folder, but only if that has a
 (it never writes there unless you name it).
 Use `--force` to replace a sample (that changes the voice for every deck that
 uses it) and `--text` to change what it says. `--tts-seed <n>` fixes the seed, so the same
-description gives the same voice again. The service is `DECK_TTS_URL`.
+description gives the same voice again. The service is `TALKDECK_TTS_URL`.
 
 Name the sample as `voice:` in the header.
 
@@ -174,8 +174,8 @@ video is composited as a circle with a border in a corner of that slide (the
 color is for light slides; dark slides (`invert`, `lead`) get
 the inverse color.
 
-The service is an async task API (`POST <DECK_AVATAR_URL>/generate` → poll
-`<DECK_AVATAR_URL>/query` → `GET /v1/video/<task_id>`). The first request after an idle gap
+The service is an async task API (`POST <TALKDECK_AVATAR_URL>/generate` → poll
+`<TALKDECK_AVATAR_URL>/query` → `GET /v1/video/<task_id>`). The first request after an idle gap
 cold-starts the engine (1–2 min), and generation runs at roughly 5× realtime,
 one job at a time, so a full deck takes a while. Heads are cached in
 `<out>/avatars/` and reused while the portrait and audio are unchanged. Slides

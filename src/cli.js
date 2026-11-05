@@ -13,8 +13,8 @@ const exists = (p) => access(p).then(() => true, () => false);
 
 const env = (name) => process.env[name];
 // service addresses come from the environment (they depend on the machine, not on the deck)
-const ttsUrl = () => env('DECK_TTS_URL') ?? 'http://127.0.0.1:8010/v1/audio';
-const avatarUrl = () => env('DECK_AVATAR_URL') ?? 'http://127.0.0.1:8010/v1/video';
+const ttsUrl = () => env('TALKDECK_TTS_URL') ?? 'http://127.0.0.1:8081/v1/audio';
+const avatarUrl = () => env('TALKDECK_AVATAR_URL') ?? 'http://127.0.0.1:8082/v1/video';
 
 /**
  * The deck folder: the one given (it must exist; "template" always works and means the
@@ -58,7 +58,7 @@ function parseSlides(spec, total) {
 const COMMANDS = {
   make: {
     summary: 'render slides.md to HTML, and optionally PDF and a narrated video',
-    usage: 'deck make [dir] [options]',
+    usage: 'talkdeck make [dir] [options]',
     options: {
       out: { type: 'string', short: 'o' },
       pdf: { type: 'boolean' },
@@ -86,7 +86,7 @@ there (.cache.json), so editing a slide only regenerates that slide.
 The video is set up in the slides.md header (front matter), for the whole deck (one voice, one face):
 
   voice: maria              the voice: a sample name from voices/ (cloned, so it is the same on every
-                            slide; create one with "deck voice"), or a description ("warm, calm
+                            slide; create one with "talkdeck voice"), or a description ("warm, calm
                             female narrator"; designed fresh per slide, drifts a little), or nothing =
                             the default narrator. Other TTS models: a voice name (af_bella).
   avatar: maria             the face: an image file in avatars/ (or "none"); no avatar if omitted
@@ -101,10 +101,10 @@ The video is set up in the slides.md header (front matter), for the whole deck (
 Voices and avatars are looked up in dir/ first, then in template/. They cannot be set per slide
 (a voice or avatar comment on a slide is an error).
 The services are set in the environment, not in the deck:
-  DECK_TTS_URL     voice-over API base   (default http://127.0.0.1:8010/v1/audio; requests go to <url>/speech)
-  DECK_AVATAR_URL  talking-head API base (default http://127.0.0.1:8010/v1/video)
-  DECK_TTS_KEY     API key for the voice-over service, if it needs one
-  DECK_AVATAR_KEY  API key for the talking-head service, if it needs one
+  TALKDECK_TTS_URL     voice-over API base   (default http://127.0.0.1:8081/v1/audio; requests go to <url>/speech)
+  TALKDECK_AVATAR_URL  talking-head API base (default http://127.0.0.1:8082/v1/video)
+  TALKDECK_TTS_KEY     API key for the voice-over service, if it needs one
+  TALKDECK_AVATAR_KEY  API key for the talking-head service, if it needs one
 Avatar generation is slow (~5x realtime, one job at a time).`,
     async run(o, [input]) {
       if (o.slides && !o.video) throw new Error('--slides only applies to the video: add --video');
@@ -128,8 +128,8 @@ Avatar generation is slow (~5x realtime, one job at a time).`,
           deck, htmlFile: html, outDir: out, log, only,
           name: only ? `slides-${o.slides.replace(/\s+/g, '').replace(/,/g, '_')}.mp4` : 'slides.mp4',
           silent: deck.config.silentDuration,
-          avatar: face && { ...avatar, url: avatarUrl(), key: env('DECK_AVATAR_KEY'), files: deck.notes.map(() => face) },
-          tts: { ...tts, url: ttsUrl(), key: env('DECK_TTS_KEY'), voiceDirs: [path.join(dir, 'voices'), path.join(TEMPLATE_DIR, 'voices')] },
+          avatar: face && { ...avatar, url: avatarUrl(), key: env('TALKDECK_AVATAR_KEY'), files: deck.notes.map(() => face) },
+          tts: { ...tts, url: ttsUrl(), key: env('TALKDECK_TTS_KEY'), voiceDirs: [path.join(dir, 'voices'), path.join(TEMPLATE_DIR, 'voices')] },
         });
         log(`video  ${mp4}`);
       }
@@ -138,7 +138,7 @@ Avatar generation is slow (~5x realtime, one job at a time).`,
 
   init: {
     summary: 'start a new deck: copy the template slides.md and assets/ into a folder',
-    usage: 'deck init [dir]',
+    usage: 'talkdeck init [dir]',
     options: {},
     help: `
 dir: the folder for the new deck (default: the current folder; created if missing).
@@ -157,7 +157,7 @@ stay bundled and are always available. Refuses to overwrite an existing slides.m
 
   voice: {
     summary: 'create a voice sample to clone (qwen-tts)',
-    usage: 'deck voice <name> [dir] --describe "<text>" [options]',
+    usage: 'talkdeck voice <name> [dir] --describe "<text>" [options]',
     options: {
       describe: { type: 'string' },
       text: { type: 'string' },
@@ -171,21 +171,21 @@ this sample, so the voice stays the same across the deck.
 
 dir: the deck folder to write into. Default: the current folder if it has a slides.md; otherwise
 it must be given and exist ("template" always means the bundled template/, e.g.
-"deck voice maria template").
-The voice-over service is DECK_TTS_URL (and DECK_TTS_KEY).
+"talkdeck voice maria template").
+The voice-over service is TALKDECK_TTS_URL (and TALKDECK_TTS_KEY).
 
       --describe <text>    the voice, e.g. "warm, calm female narrator" (required)
       --text <text>        what the sample says (default: a ~13 s neutral passage; 10-15 s clones best)
       --tts-seed <n>       fixed seed, to get the same voice again from the same description
       --force              replace an existing sample (changes the voice for every deck using it)`,
     async run(o, [name, input]) {
-      if (!name || !o.describe) throw new Error('usage: deck voice <name> [dir] --describe "warm, calm female narrator"');
+      if (!name || !o.describe) throw new Error('usage: talkdeck voice <name> [dir] --describe "warm, calm female narrator"');
       if (!/^[\w.-]+$/.test(name)) throw new Error(`bad voice name "${name}" (letters, digits, _ . - only)`);
       const dir = await deckDir(input, { fallbackToTemplate: false });
       const seed = o['tts-seed'] === undefined ? undefined : Number(o['tts-seed']);
       if (seed !== undefined && !(Number.isInteger(seed) && seed >= 0 && seed <= 2 ** 31)) throw new Error(`bad --tts-seed "${o['tts-seed']}" (an integer from 0 to ${2 ** 31})`);
       const r = await createVoiceSample({
-        url: ttsUrl(), key: env('DECK_TTS_KEY'), name, describe: o.describe, text: o.text, seed,
+        url: ttsUrl(), key: env('TALKDECK_TTS_KEY'), name, describe: o.describe, text: o.text, seed,
         dir: path.join(dir, 'voices'), force: o.force,
       });
       log(`voice  ${r.file}  (${r.seconds.toFixed(1)} s)`);
@@ -196,12 +196,12 @@ The voice-over service is DECK_TTS_URL (and DECK_TTS_KEY).
 
 function topHelp() {
   const w = Math.max(...Object.values(COMMANDS).map((c) => c.usage.length));
-  return `deck — render Markdown slides to HTML, PDF and video
+  return `talkdeck — render Markdown slides to HTML, PDF and video
 
 Usage:
 ${Object.values(COMMANDS).map((c) => `  ${c.usage.padEnd(w)}  ${c.summary}`).join('\n')}
 
-Run "deck <command> --help" for the options of a command.
+Run "talkdeck <command> --help" for the options of a command.
 `;
 }
 
@@ -230,7 +230,7 @@ try {
 } catch (e) {
   if (e.code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION') {
     const flag = e.message.match(/'(-[^']+)'/)?.[1] ?? 'option';
-    console.error(`error: unknown option ${flag} for "deck ${command}" (see: deck ${command} --help)`);
+    console.error(`error: unknown option ${flag} for "talkdeck ${command}" (see: talkdeck ${command} --help)`);
   } else {
     console.error(`error: ${e.message}`);
   }

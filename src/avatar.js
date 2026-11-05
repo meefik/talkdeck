@@ -14,7 +14,7 @@ const QUERY_TIMEOUT_MS = 60_000;
  * One portrait per call (the same face for the whole deck). `generate` writes `file`, unless
  * `cache` says it was already generated from the same portrait and audio.
  *
- * `url` is the video API base, e.g. http://127.0.0.1:8010/v1/video; `key`, if set, is sent as a Bearer token.
+ * `url` is the video API base, e.g. http://127.0.0.1:8082/v1/video; `key`, if set, is sent as a Bearer token.
  */
 export function createAvatar({ url, key, size, cache, log = () => {} }) {
   const base = url.replace(/\/+$/, '');

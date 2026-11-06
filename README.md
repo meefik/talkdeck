@@ -7,7 +7,7 @@ slides engine (so Marp syntax, directives and themes work); everything else
 
 ## Install
 
-The package is not published to npm; install it from GitHub (Node ≥ 20):
+The package is not published to npm; install it from GitHub (Node.js):
 
 ```bash
 npm install -g github:meefik/talkdeck             # the `talkdeck` command, globally
@@ -56,7 +56,7 @@ overrides them.
 
 ## HTML player and presenter mode
 
-Keys: **→ ↓ Space PageDown** next, **← ↑ PageUp** previous, **Home/End**, **F**
+Keys: **→ ↓ Space Enter PageDown** next, **← ↑ Backspace PageUp** previous, **Home/End**, **F**
 fullscreen, **P** presenter window (current + next slide, notes, timer, `+/−`
 zoom the notes). Click: left quarter = back, elsewhere = forward. The URL hash
 (`#5`) follows the slide.
@@ -76,7 +76,7 @@ visible content
 
 The same note comments are the script for the voice-over (no separate text
 files). `talkdeck make --video` narrates each slide through an OpenAI-compatible
-`/audio/speech` API (default: **qwentts**, model `qwen-tts`, on a local service) and can put a talking head on each slide:
+`/audio/speech` API (default: **Qwen3-TTS**, model `qwen-tts`, on a local service) and can put a talking head on each slide:
 
 ```bash
 talkdeck make --video
@@ -120,7 +120,7 @@ addresses depend on the machine:
 
 A `tts-url` or `avatar-url` key in the header is an error that points here.
 
-**Voices.** qwentts has no fixed voice list, so a voice is a *sample* that gets
+**Voices.** Qwen3-TTS has no fixed voice list, so a voice is a *sample* that gets
 cloned. Samples live in `voices/` (`[dir]/voices/` first, then `template/voices/`):
 `<name>.wav` (10-15 s, one clean speaker) plus `<name>.txt` (what it says). The
 template ships `maria` (female) and `leon` (male). Create your own from a
@@ -188,10 +188,12 @@ without notes get no avatar.
 - `src/config.js` — header (front matter) settings and their validation
 - `src/color.js` — color parsing for the avatar border
 - `src/cache.js` — the `.cache.json` manifest of generated files
+- `src/helpers.js` — small shared helpers (`exists`, `hash`)
 - `src/render.js` — Markdown → slides, HTML page, assets
 - `src/runtime/` — player script and CSS inlined into `slides.html`
 - `src/pdf.js`, `src/browser.js` — PDF export via headless Chrome
 - `src/notes.js`, `src/tts.js`, `src/voices.js`, `src/avatar.js`, `src/video.js` — voice-over, avatar and video pipeline
+- `deploy/` — optional TTS + avatar servers (Qwen3-TTS, Ditto) as container images, one compose file per GPU vendor; see `deploy/README.md`
 - `SKILL.md` — instructions for AI agents using this CLI
 
 ## Cheatsheet

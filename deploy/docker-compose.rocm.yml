@@ -12,6 +12,7 @@
 # Optional: `API_KEY=secret docker compose ... up -d` makes both services require
 # `Authorization: Bearer secret` (then export TALKDECK_TTS_KEY / TALKDECK_AVATAR_KEY).
 
+# (environment is per service: podman-compose does not expand ${VAR} inherited through a merge key)
 x-rocm: &rocm
   devices:
     - /dev/kfd
@@ -19,10 +20,6 @@ x-rocm: &rocm
   security_opt:
     - seccomp=unconfined
   ipc: host
-  environment:
-    - ROCR_VISIBLE_DEVICES=0
-    - API_KEY=${API_KEY:-}
-    - HF_TOKEN=${HF_TOKEN:-}
 
 services:
   tts:
@@ -40,6 +37,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30m
+    environment:
+      - ROCR_VISIBLE_DEVICES=0
+      - API_KEY
+      - HF_TOKEN
     volumes:
       - tts_models:/models
 
@@ -58,6 +59,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30m
+    environment:
+      - ROCR_VISIBLE_DEVICES=0
+      - API_KEY
+      - HF_TOKEN
+      - MIOPEN_FIND_MODE=FAST
+      - MIOPEN_USER_DB_PATH=/opt/ditto/checkpoints/.miopen
+      - MIOPEN_CUSTOM_CACHE_DIR=/opt/ditto/checkpoints/.miopen
     volumes:
       - avatar_models:/opt/ditto/checkpoints
       - avatar_tasks:/srv/avatar

@@ -1,16 +1,15 @@
-import { readFile, readdir, cp, mkdir, writeFile, access } from 'node:fs/promises';
+import { readFile, readdir, cp, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marp } from '@marp-team/marp-core';
 import container from 'markdown-it-container';
+import { exists } from './helpers.js';
 import { deckConfig, readFrontMatter } from './config.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // the bundled template/ sits next to src/
 export const TEMPLATE_DIR = path.resolve(HERE, '..', 'template');
 const BUNDLED_THEMES = path.join(TEMPLATE_DIR, 'themes');
-
-const exists = (p) => access(p).then(() => true, () => false);
 
 // Lets slides use `::: class names` ... `:::` instead of raw <div> tags.
 // Nest by giving the outer fence more colons (e.g. `::::` around `:::`).
@@ -34,9 +33,9 @@ async function addThemes(marp, dir) {
 
 /**
  * Read `<dir>/slides.md` and render it.
- * Returns { html, css, notes, title, size, config } where `notes` is an
- * array (one entry per slide) of arrays of note lines (the HTML comments
- * that are not Marp directives), and `classes` (the class directive per slide).
+ * Returns { html, css, notes, classes, title, size, config }: `notes` is one array of note lines
+ * per slide (the HTML comments that are not Marp directives), `classes` the `class` directive
+ * per slide, `config` the voice, tts and avatar settings from the front matter.
  */
 export async function renderDeck(dir) {
   const source = await readFile(path.join(dir, 'slides.md'), 'utf8');
@@ -70,9 +69,9 @@ export async function renderDeck(dir) {
     html,
     css,
     notes: comments,
-    classes: directives.map((d) => String(d.class ?? '')), // per slide: the `class` directive
+    classes: directives.map((d) => String(d.class ?? '')),
     title: typeof front.title === 'string' && front.title ? front.title : path.basename(path.resolve(dir)),
-    config, // voice, tts and avatar settings from the front matter
+    config,
     size: { width: Number(w), height: Number(h) },
   };
 }

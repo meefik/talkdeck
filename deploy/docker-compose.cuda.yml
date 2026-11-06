@@ -35,8 +35,8 @@ services:
       retries: 3
       start_period: 30m
     environment:
-      - API_KEY=${API_KEY:-}
-      - HF_TOKEN=${HF_TOKEN:-}
+      - API_KEY
+      - HF_TOKEN
     volumes:
       - tts_models:/models
     devices:
@@ -59,8 +59,8 @@ services:
       retries: 3
       start_period: 30m
     environment:
-      - API_KEY=${API_KEY:-}
-      - HF_TOKEN=${HF_TOKEN:-}
+      - API_KEY
+      - HF_TOKEN
     volumes:
       - avatar_models:/opt/ditto/checkpoints
       - avatar_tasks:/srv/avatar

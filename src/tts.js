@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { hash } from './cache.js';
+import { hash } from './helpers.js';
 import { findVoice, listVoices } from './voices.js';
 
 const isQwen = (model) => model.startsWith('qwen-tts');
@@ -10,7 +10,7 @@ const isQwen = (model) => model.startsWith('qwen-tts');
  * e.g. http://127.0.0.1:8081/v1/audio. `synth` writes `file` (wav), unless `cache` says it was
  * already generated from the same inputs.
  *
- * - qwentts (model `qwen-tts*`), `voice` is one of:
+ * - Qwen3-TTS (model `qwen-tts*`), `voice` is one of:
  *     none / "default"  the default narrator
  *     a sample name     a voice cloned from `voices/<name>.wav` (kept the same on every slide)
  *     a description     a voice designed from the text ("warm, calm female narrator"); drifts per slide

@@ -9,7 +9,7 @@ description: Build slide decks from Markdown with the `talkdeck` CLI from talkde
 
 Use the `talkdeck` CLI (`talkdeck <command>`); do not invent other commands. Run `talkdeck <command> --help` for exact options. Commands: `init`, `make`, `voice`.
 
-Setup: the package is not on npm, it is installed from GitHub (Node ≥ 20). Check `talkdeck --help` (or `npx talkdeck --help` in a project that has it as a dependency) first; if it is missing, install it:
+Setup: the package is not on npm, it is installed from GitHub (Node ≥ 22.12). Check `talkdeck --help` (or `npx talkdeck --help` in a project that has it as a dependency) first; if it is missing, install it:
 
 ```bash
 npm install -g github:meefik/talkdeck      # global `talkdeck` command

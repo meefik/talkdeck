@@ -6,7 +6,8 @@ import { speechPerSlide } from './notes.js';
 import { createTts } from './tts.js';
 import { createAvatar, isDarkSlide } from './avatar.js';
 import { invertColor, parseColor } from './color.js';
-import { hash, openCache } from './cache.js';
+import { openCache } from './cache.js';
+import { hash } from './helpers.js';
 
 const PAD = 1.0;    // silence after each voice-over, before the slide fades out (s)
 const FADE = 0.3;   // fade in/out between interior slides (s)

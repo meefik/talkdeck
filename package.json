@@ -11,7 +11,7 @@
     "talkdeck": "src/cli.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
     "@marp-team/marp-core": "^4.4.0",

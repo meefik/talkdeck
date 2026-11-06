@@ -1,6 +1,6 @@
-import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { hash } from './cache.js';
+import { exists, hash } from './helpers.js';
 
 const POLL_MS = 5000;
 const SUBMIT_TIMEOUT_MS = 300_000;  // the first call after an idle gap cold-starts the engine (~1-2 min)
@@ -66,7 +66,7 @@ export function createAvatar({ url, key, size, cache, log = () => {} }) {
     throw new Error(`avatar task ${id} timed out`);
   }
 
-  /** portrait (png/jpg) + audioFile (wav) -> head video (mp4, size x size) written to `file`. */
+  /** portrait (png/jpg/webp) + audioFile (wav) -> head video (mp4, size x size) written to `file`. */
   return async function generate(portrait, audioFile, file) {
     const [portraitBytes, audioBytes] = await Promise.all([readFile(portrait), readFile(audioFile)]);
     const id = hash(portraitBytes, audioBytes, String(size));
@@ -89,7 +89,6 @@ export function createAvatar({ url, key, size, cache, log = () => {} }) {
 }
 
 const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp'];
-const isFile = (p) => access(p).then(() => true, () => false);
 
 /**
  * Resolve the avatar name from the header to a portrait file: a name from the avatars/ folders
@@ -100,11 +99,11 @@ export async function resolveAvatar(name, { deckDir, dirs }) {
   for (const d of dirs) {
     for (const ext of ['', ...IMAGE_EXT]) {
       const f = path.join(d, name + ext);
-      if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await isFile(f))) return f;
+      if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await exists(f))) return f;
     }
   }
   const f = path.resolve(deckDir, name);
-  if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await isFile(f))) return f;
+  if (IMAGE_EXT.includes(path.extname(f).toLowerCase()) && (await exists(f))) return f;
   const known = [];
   for (const d of dirs) {
     try {
@@ -114,6 +113,6 @@ export async function resolveAvatar(name, { deckDir, dirs }) {
   throw new Error(`unknown avatar "${name}" (available: ${[...new Set(known)].join(', ') || 'none'})`);
 }
 
-// Slides whose background is dark: the `invert` theme, and the gradient layouts.
+// Slides whose background is dark: the `invert` class, and the gradient `lead` layout.
 const DARK = ['invert', 'lead']; // divider and quote are light unless combined with invert
 export const isDarkSlide = (classes) => String(classes ?? '').split(/\s+/).some((c) => DARK.includes(c));

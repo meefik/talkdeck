@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { access, cp, mkdir } from 'node:fs/promises';
+import { cp, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { exists } from './helpers.js';
 import { renderDeck, writeHtml, TEMPLATE_DIR } from './render.js';
 import { writePdf } from './pdf.js';
 import { writeVideo } from './video.js';
@@ -9,7 +10,6 @@ import { resolveAvatar } from './avatar.js';
 import { createVoiceSample } from './voices.js';
 
 const log = (m) => console.log(m);
-const exists = (p) => access(p).then(() => true, () => false);
 
 const env = (name) => process.env[name];
 // service addresses come from the environment (they depend on the machine, not on the deck)
@@ -33,7 +33,7 @@ async function deckDir(input, { fallbackToTemplate }) {
   throw new Error('no deck folder: run this inside a folder with slides.md, or pass [dir] (e.g. "template")');
 }
 
-/** Shared by make and video: render slides.md to <out>/slides.html (+ assets/). */
+/** Render slides.md to <out>/slides.html (+ assets/). */
 async function render(o, input) {
   const dir = await deckDir(input, { fallbackToTemplate: true });
   if (!(await exists(path.join(dir, 'slides.md')))) throw new Error(`no slides.md in ${dir}`);

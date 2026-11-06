@@ -14,8 +14,11 @@ function words(n) {
 export function ttsSafe(text) {
   return text
     .replace(/<[^>]*>/g, ' ')
-    .replace(/[*`_]/g, '')
+    .replace(/[*`]/g, '')
+    .replace(/(^|[^\w])_+|_+(?=$|[^\w])/g, '$1') // markdown emphasis, but keep underscores inside words
+    .replace(/\b\d{1,3}(?:,\d{3})+\b/g, (n) => n.replace(/,/g, '')) // 1,500 -> 1500
     .replace(/\b(\d+)\.x\b/g, (_, a) => `${words(+a)} point x`)
+    .replace(/\b(\d+)\.(\d+)%/g, (_, a, b) => `${words(+a)} point ${[...b].map((d) => ONES[d]).join(' ')} percent`)
     .replace(/\b(\d+)\.(\d+)\b/g, (_, a, b) => `${words(+a)} point ${[...b].map((d) => ONES[d]).join(' ')}`)
     .replace(/\b(\d+)%/g, (_, a) => `${words(+a)} percent`)
     .replace(/\b\d+\b/g, (a) => words(+a))

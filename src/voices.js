@@ -1,7 +1,6 @@
-import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-
-const isFile = (p) => access(p).then(() => true, () => false);
+import { exists } from './helpers.js';
 
 // ~13 s of varied, neutral speech: enough for a stable clone (10-15 s of one clean speaker works best)
 export const SAMPLE_TEXT =
@@ -18,7 +17,7 @@ function wavSeconds(wav) {
 export async function findVoice(name, dirs) {
   for (const d of dirs) {
     const wav = path.join(d, `${name}.wav`);
-    if (await isFile(wav)) {
+    if (await exists(wav)) {
       const txt = await readFile(path.join(d, `${name}.txt`), 'utf8').catch(() => undefined);
       return { name, wav: await readFile(wav), text: txt?.trim() || undefined };
     }
@@ -41,7 +40,7 @@ export async function listVoices(dirs) {
  */
 export async function createVoiceSample({ url, key, name, describe, text = SAMPLE_TEXT, seed, dir, force }) {
   const wavFile = path.join(dir, `${name}.wav`);
-  if (!force && (await isFile(wavFile))) throw new Error(`${wavFile} exists (use --force to replace it)`);
+  if (!force && (await exists(wavFile))) throw new Error(`${wavFile} exists (use --force to replace it)`);
   const res = await fetch(`${url.replace(/\/+$/, '')}/speech`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(key && { Authorization: `Bearer ${key}` }) },

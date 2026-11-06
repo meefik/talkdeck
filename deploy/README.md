@@ -16,8 +16,8 @@ talkdeck make my-talk --video
 
 | Image | Contents | Port |
 |---|---|---|
-| `talkdeck/tts` | the official `qwen-tts` (PyPI) + a ~200-line OpenAI-compatible server (`/v1/audio/speech`, `/v1/audio/voices`, `/v1/models`) | 8081 |
-| `talkdeck/avatar` | the official `ditto-talkinghead` (pinned commit) + a ~270-line task-API server (`/v1/video/generate`, `/v1/video/query`, `GET /v1/video/<id>`) | 8082 |
+| `talkdeck/tts` | the official `qwen-tts` (PyPI) + an OpenAI-compatible server (`/v1/audio/speech`, `/v1/audio/voices`, `/v1/models`) | 8081 |
+| `talkdeck/avatar` | the official `ditto-talkinghead` (pinned commit) + a task-API server (`/v1/video/generate`, `/v1/video/query`, `GET /v1/video/<id>`) | 8082 |
 
 Each is built in two variants, from one Dockerfile per service (the `BASE` build-arg):
 

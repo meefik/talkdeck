@@ -1,6 +1,6 @@
-import { access } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { exists } from './helpers.js';
 
 const CANDIDATES = [
   'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome', 'microsoft-edge',
@@ -17,7 +17,7 @@ async function findChrome() {
   for (const c of CANDIDATES) {
     const paths = c.includes('/') || c.includes('\\') ? [c] : dirs.map((d) => `${d}/${c}`);
     for (const p of paths) {
-      if (await access(p).then(() => true, () => false)) return p;
+      if (await exists(p)) return p;
     }
   }
   throw new Error('Chrome/Chromium/Edge not found. Install one or set CHROMIUM_PATH.');

@@ -1,14 +1,6 @@
-import { createHash } from 'node:crypto';
-import { access, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-
-export const hash = (...parts) => {
-  const h = createHash('sha256');
-  for (const p of parts) h.update(typeof p === 'string' || Buffer.isBuffer(p) ? p : JSON.stringify(p)).update('\0');
-  return h.digest('hex').slice(0, 24);
-};
-
-const exists = (p) => access(p).then(() => true, () => false);
+import { exists } from './helpers.js';
 
 /**
  * Generated files live in the output directory under readable names

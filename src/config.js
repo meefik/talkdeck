@@ -54,13 +54,13 @@ const color = (v) => {
 /**
  * Deck settings from the front matter (one voice and one face for the whole deck):
  *
- *   voice, tts-model, tts-speed              the voice-over
- *   silent-duration                                    seconds shown for slides without notes
- *   avatar, avatar-size, avatar-diameter,              the talking head and how the circle looks
- *   avatar-position, avatar-border, avatar-border-color
+ *   voice, tts-model, tts-speed     the voice-over
+ *   silent-duration                 seconds shown for slides without notes
+ *   avatar, avatar-size, avatar-diameter, avatar-position, avatar-border, avatar-border-color
+ *                                   the talking head and how the circle looks
  *
- * The service addresses and the TTS key are not deck settings: TALKDECK_TTS_URL, TALKDECK_AVATAR_URL and
- * TALKDECK_TTS_KEY in the environment.
+ * The service addresses and keys are not deck settings: TALKDECK_TTS_URL, TALKDECK_AVATAR_URL,
+ * TALKDECK_TTS_KEY and TALKDECK_AVATAR_KEY in the environment.
  */
 export function deckConfig(front) {
   for (const [key, name] of Object.entries(MOVED)) {
